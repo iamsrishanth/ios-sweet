@@ -93,7 +93,7 @@ python3 tools/j8/mkbootv0.py parse out/granule-probe-j8.img
 ```
 
 The image built on 2026-11-17 has sha256
-`661884831810b34b46818829453e37fc8ab68d405e5e01f3a38c48e7d8a2cfd7`
+`73fffc9d575e93a7431c2fb680fda2b0266de919b0ca40e20cb055703b04b24a`
 (4096-byte payload, 6144-byte image). Rebuild it and compare; do not flash a
 different hash without re-reading the payload.
 

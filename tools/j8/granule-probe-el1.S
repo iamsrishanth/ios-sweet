@@ -76,7 +76,7 @@ _start:
      * unit with a dead power button. Power-off is recoverable with
      * Volume Up + USB into TWRP.
      */
-    mov     x13, #64
+    mov     x13, #192
 5:  mov     x15, #0x4000000
 6:  subs    x15, x15, #1
     b.ne    6b

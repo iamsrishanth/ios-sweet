@@ -53,7 +53,7 @@ adb shell sh /data/local/tmp/j8-compat-check.sh
 
 # 4. EL1 granule probe image (built, NOT flashed)
 tools/j8/build-granule-probe.sh <boot-stock.img> out/granule-probe-j8.img
-# -> sha256 661884831810b34b46818829453e37fc8ab68d405e5e01f3a38c48e7d8a2cfd7
+# -> sha256 73fffc9d575e93a7431c2fb680fda2b0266de919b0ca40e20cb055703b04b24a
 ```
 
 The `<boot-stock.img>` used locally is the Havoc boot image kept for rollback

@@ -69,7 +69,7 @@ evidence.
 | 2026-11-17 | EL0 ID-register probe (`tools/j8/j8probe.c`) | AArch64 EL0 runs; `MRS ID_AA64MMFR0_EL1` traps with SIGILL | `tools/j8/README.md` |
 | 2026-11-17 | Compatibility gate (`tools/j8/j8-compat-check.sh`) | `RESULT PASS` on model/partitions/kernel | tool output |
 | 2026-11-17 | Boot image round-trip (`mkbootv0.py selftest`) | byte-identical | tool output |
-| 2026-11-17 | EL1 granule probe image build | image built, sha256 `661884...cfd7`, **not flashed** | `INSTALL-RECOVERY.md` section 5 |
+| 2026-11-17 | EL1 granule probe image build | image built, sha256 `73fffc...b24a`, **not flashed** | `INSTALL-RECOVERY.md` section 5 |
 | - | XNU build for J8 | not attempted | - |
 | - | Any J8 boot of XNU/iOS | not attempted | - |
 
