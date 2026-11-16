@@ -37,37 +37,46 @@ does not demonstrate any of this.
 
 ## 2. The page-size question (resolved, with caveats)
 
-### 2.1 Hardware: 16 KiB granule support is implementation-defined and unverified here
+### 2.1 Hardware: Cortex-A53 r0p4 has no 16 KiB granule (documented)
 
 - CPU: ARM part `0xd03`, revision `r0p4` = Cortex-A53. `/proc/cpuinfo` on the
-  device reports exactly this.
-- Translation-granule support is **implementation-defined** and the only
-  authority is `ID_AA64MMFR0_EL1.TGran16` (Arm ARM DDI 0487: `0b0000` not
-  supported, `0b0001` supported, `0b0010` supported with 52-bit input addresses
-  / FEAT_LPA2).
-- The documents conflict for this core:
-  - Arm's Cortex-A53 programmer's guide (DEN0024A) states that the Cortex-A53
-    "supports all three sizes" (4 KB, 16 KB, 64 KB).
-  - An Arm engineer on the linux-arm-kernel list states the opposite for real
-    integrations: "by default A53 doesn't enable 16K support", and the
-    DragonBoard 410C (APQ8016, also Cortex-A53) fails to boot a 16 KB-page
-    kernel.
-  - Therefore neither "A53 always has 16K" nor "A53 never has 16K" is a safe
-    assumption for the Snapdragon 450. It has to be read from this handset.
+  device reports exactly this; r0p4 is the final A53 revision, so the r0p4 TRM
+  (DDI 0500J) is the right document.
+- The Cortex-A53 TRM's `ID_AA64MMFR0_EL1` table states, field by field:
+  `TGran4 [31:28] = 0x0` (4 KB supported), `TGran64 [27:24] = 0x0` (64 KB
+  supported), `TGran16 [23:20] = 0x0` (**16 KB not supported**). The same TRM's
+  `TCR_EL1.TG0` description lists only `0b00` 4 KB and `0b01` 64 KB; the 16 KB
+  encoding is not a legal value for this core. Composed with the other documented
+  fields (SNSMem 1, BigEnd 1, ASIDBits 2, PARange 2) the value is
+  `0x0000_0000_0000_1122`.
+- An independent Linux report for a big.LITTLE part corroborates exactly that
+  composed value: the A53 cluster reads `0x00000000001122` while the A73 cluster
+  reads `0x00000000101122`, differing only in `TGran16` bits [23:20].
+- Correction of an earlier draft in this branch: Arm's Cortex-A53 programmer's
+  guide (DEN0024A) contains a sentence that the A53 "supports all three sizes".
+  That sentence is not core-revision-specific and conflicts with the r0p4 TRM.
+  The TRM plus the `0x1122` observation win for this handset; the DEN0024A text
+  is recorded in `docs/j8/research/arm-granules.md` so the discrepancy is not
+  lost. Also corrected there: `TGran4` is [31:28], not [15:12] ([15:12] is
+  `SNSMem`), and the `TGran4`/`TGran64` polarity is inverted relative to
+  `TGran16`.
 - The reference ports both *require* the 16 KiB granule in hardware:
   `pexpert/pexpert/arm64/SWEET.h` defines `__ARM_16K_PG__ 1` and
-  `shim/mmu.c` programs `TCR_EL1.TG0 = 16K` with 16K page-table geometry.
-- **Device measurement attempt (2026-11-17):** EL0 cannot read the register.
-  A hand-built static AArch64 probe (`tools/j8/j8probe.c`) runs on the phone,
-  but `MRS ID_AA64MMFR0_EL1` raises SIGILL because the kernel traps ID-register
-  reads (`HCR_EL2.TID3`). The probe, its source and its output are recorded in
-  `docs/j8/research/arm-granules.md` and `tools/j8/README.md`.
-- **Not yet measured:** an EL1 probe (`tools/j8/granule-probe-el1.S`) is built
-  and packaged as a legacy boot image by `tools/j8/build-granule-probe.sh`. It
-  paints the splash green/red and then PSCI-resets/powers-off. It has **not been
-  flashed**. Until it runs, `TGran16` on this unit is **unverified**.
-- The installed kernel's `CONFIG_ARM64_4K_PAGES=y` is a software choice and
-  says nothing about the hardware granule.
+  `shim/mmu.c` programs `TCR_EL1.TG0 = 16K` with 16K page-table geometry. A J8
+  kernel built that way would not boot.
+- **Device measurement attempt (2026-11-17):** EL0 cannot read the register at
+  all. Arm ARM D24.2.87 shows that at EL0 the read is UNDEFINED (or trapped by
+  FEAT_IDST); `HCR_EL2.TID3` is the EL1-to-EL2 trap, not an EL0 gate. A static
+  AArch64 probe (`tools/j8/j8probe.c`) ran on the phone and took SIGILL exactly
+  as required. The EL0 probe therefore *confirms the access model*, not the
+  value.
+- **Not yet measured on this unit:** the value rests on the TRM plus the core
+  revision ID. An EL1 probe (`tools/j8/granule-probe-el1.S`) is built and
+  packaged as a legacy boot image by `tools/j8/build-granule-probe.sh`; it paints
+  the splash green/red and powers off. It has **not been flashed**. Treat it as
+  confirmation of the documented answer, not as the thing that decides it.
+- The installed kernel's `CONFIG_ARM64_4K_PAGES=y` is a software choice and is
+  consistent with the TRM, but is not itself proof of the granule.
 
 ### 2.2 XNU decouples the hardware granule from the advertised page size
 
@@ -138,16 +147,18 @@ Relevant source locations:
   the userland to tolerate 4 KiB; that is **not** assumed to work and is not the
   preferred path.
 
-**Verdict (2026-11-17):** the hardware granule on this specific unit is
-**unverified**. The documents disagree, EL0 cannot read it, and the EL1 probe
-that settles it is built but has not been run. What *is* established from source
-inspection is that XNU can advertise a 16 KiB page size on 4 KiB hardware via
-`PAGE_RATIO`, so the port is not necessarily blocked even if `TGran16 = 0`.
-That path is a machine-config + shim + validation task, not an architectural
-dead end. **Do not describe the page-size question as resolved until the EL1
-probe has run.**
+**Verdict (2026-11-17):** the Cortex-A53 r0p4 in this J8 is **documented as
+having no 16 KiB granule** (DDI 0500J: `TGran16 = 0x0`; `TCR_EL1.TG0` allows only
+4 KB and 64 KB; corroborated by the `0x1122` cluster value). A kernel built with
+`__ARM_16K_PG__` therefore cannot run here. That is not a dead end: XNU can
+advertise a 16 KiB software page size on 4 KiB hardware tables via `PAGE_RATIO`,
+so the port becomes a machine-config + shim + validation task. What remains
+unproven is whether that path is sound in xnu-8796.101.5 (it exists in-tree but
+no board config or reference port exercises it) and whether it holds up on the
+J8 in QEMU and on hardware. The EL1 probe is confirmation of the documented
+answer, not the decision.
 
-The experiment that settles it (see `tools/j8/README.md` and
+The confirmation experiment (see `tools/j8/README.md` and
 `INSTALL-RECOVERY.md`):
 
 | Step | Action |
@@ -155,7 +166,7 @@ The experiment that settles it (see `tools/j8/README.md` and
 | 1 | `tools/j8/build-granule-probe.sh work/gapps/boot-stock.img` → image + sha256 |
 | 2 | verify the rollback image and hash are present on the phone/host |
 | 3 | flash the probe to `boot` from TWRP, reboot |
-| 4 | observe: **red band + power off** = `TGran16 = 0`; **green band + power off** = `TGran16 = 1`; normal splash/hang = probe did not run |
+| 4 | observe: **red band + power off** = `TGran16 = 0` (confirms the TRM); **green band + power off** = `TGran16 = 1` (would contradict the TRM and require a re-think); normal splash/hang = probe did not run |
 | 5 | restore the rollback image before any other work |
 
 ## 3. Selected software baseline

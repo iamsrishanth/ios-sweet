@@ -2,15 +2,20 @@
  * granule-probe-el1.S - read ID_AA64MMFR0_EL1.TGran16 at EL1 on a Qualcomm
  * phone and report the answer without a console.
  *
- * Why EL1: on the Galaxy J8's Android kernel, EL0 reads of ID_AA64* registers
- * are trapped (HCR_EL2.TID3) and raise SIGILL. At EL1 the kernel itself reads
- * these registers, so this probe can too.
+ * Why EL1: the architecture has no EL0 access path to ID_AA64MMFR0_EL1 at all
+ * (Arm ARM D24.2.87: at EL0 the read is UNDEFINED, or trapped by FEAT_IDST), so
+ * a userspace probe gets SIGILL. At EL1 the register is readable, so this probe
+ * runs before any OS and reads it.
+ *
+ * Expected on this handset: the Cortex-A53 r0p4 TRM (DDI 0500J) documents
+ * TGran16 = 0x0 (no 16 KiB granule) and TCR_EL1.TG0 allows only 4 KB and 64 KB.
+ * This probe is the on-unit confirmation of that answer.
  *
  * Packaged as a legacy Android boot image and started by ABL at EL1 with the
  * MMU off. Result reporting:
  *   - paint a band on the bootloader's splash framebuffer
- *       green = 16 KiB granule supported
- *       red   = not supported (expected if the SoC integration disables it)
+ *       green = 16 KiB granule supported (would contradict the TRM)
+ *       red   = not supported (expected)
  *   - hold the colour for about ten seconds
  *   - PSCI SYSTEM_OFF in both cases (no reboot loop on a dead-power-button unit)
  *

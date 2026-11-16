@@ -13,10 +13,17 @@
  *     ELF0-ID-READ: TRAPPED (SIGILL) - cannot read ID registers at EL0
  *
  * Interpretation: 64-bit EL0 works on this kernel (this binary is AArch64 and
- * ran), but Samsung's kernel traps EL0 reads of the ID registers to EL1, so
- * TGran16 cannot be read from userspace. The value therefore has to come from
- * the documented core (Cortex-A53 has no 16K granule) or from an EL1 probe
- * (tools/j8/granule-probe-el1.S).
+ * ran), but the architecture has no EL0 access path for ID_AA64MMFR0_EL1 at
+ * all (Arm ARM D24.2.87: at EL0 the read is UNDEFINED, or trapped by FEAT_IDST),
+ * so the SIGILL is the expected result and the register can only be read at
+ * EL1/EL2. On this phone the answer comes from the core's TRM (Cortex-A53 r0p4,
+ * DDI 0500J: TGran16 = 0x0, not supported) and can be confirmed at EL1 with
+ * tools/j8/granule-probe-el1.S.
+ *
+ * Decode note (corrected 2026-11-17): TGran4 is bits [31:28], TGran64 [27:24]
+ * and TGran16 [23:20]. TGran4/TGran64 use 0x0 = supported, 0xF = not supported;
+ * TGran16 uses 0x0 = NOT supported. The fields therefore need different
+ * decoders; an earlier version of this file used the wrong bits and polarity.
  *
  * Build: tools/j8/build-probe.sh
  */
@@ -64,12 +71,23 @@ static uint64_t rd_ctr(void)
 	return v;
 }
 
-static const char *tg(uint64_t v, int shift)
+/* TGran4 / TGran64: 0x0 = supported, 0xF = not supported, rest reserved. */
+static const char *tg_legacy(uint64_t v, int shift)
 {
 	switch ((v >> shift) & 0xf) {
-	case 0: return "not supported";
-	case 1: return "supported";
-	case 2: return "supported, 52-bit input (FEAT_LPA2)";
+	case 0x0: return "supported";
+	case 0xf: return "not supported";
+	default: return "reserved";
+	}
+}
+
+/* TGran16: 0x0 = NOT supported (inverted vs TGran4/64), 0x1 = supported. */
+static const char *tg16(uint64_t v, int shift)
+{
+	switch ((v >> shift) & 0xf) {
+	case 0x0: return "not supported";
+	case 0x1: return "supported";
+	case 0x2: return "supported, 52-bit input (FEAT_LPA2)";
 	default: return "reserved";
 	}
 }
@@ -104,9 +122,9 @@ int main(void)
 	ctr = rd_ctr();
 
 	printf("ID_AA64MMFR0_EL1 = 0x%016llx\n", (unsigned long long)mmfr0);
-	printf("  TGran4 [15:12] = %s\n", tg(mmfr0, 12));
-	printf("  TGran16[23:20] = %s\n", tg(mmfr0, 20));
-	printf("  TGran64[27:24] = %s\n", tg(mmfr0, 24));
+	printf("  TGran4 [31:28] = %s\n", tg_legacy(mmfr0, 28));
+	printf("  TGran16[23:20] = %s\n", tg16(mmfr0, 20));
+	printf("  TGran64[27:24] = %s\n", tg_legacy(mmfr0, 24));
 	printf("  PARange[3:0]   = %llu\n", (unsigned long long)(mmfr0 & 0xf));
 	printf("ID_AA64PFR0_EL1  = 0x%016llx\n", (unsigned long long)pfr0);
 	printf("  EL0[3:0]=%llu EL1[7:4]=%llu EL2[11:8]=%llu EL3[15:12]=%llu\n",

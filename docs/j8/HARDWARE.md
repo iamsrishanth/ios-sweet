@@ -20,11 +20,13 @@ have to touch; it does not claim any of it works under XNU.
   `enable-method = "psci"`, PSCI 1.0 via `smc`.
 - Cache line 64 B (`CTR_EL0` is trapped at EL0; XNU board configs use
   `MMU_CLINE 6` for 64 B, matching A53).
-- **Translation granules:** 4 KiB page tables are what the installed kernel
-  uses (`CONFIG_ARM64_4K_PAGES=y`). Whether the core exposes the optional 16 KiB
-  granule (`ID_AA64MMFR0_EL1.TGran16`) is **unverified on this unit**: EL0 reads
-  of ID registers are trapped, and the EL1 probe prepared in
-  `tools/j8/granule-probe-el1.S` has not been run. See `FEASIBILITY.md` §2.
+- **Translation granules:** the installed kernel uses 4 KiB page tables
+  (`CONFIG_ARM64_4K_PAGES=y`), and the Cortex-A53 r0p4 TRM documents
+  `TGran16 = 0x0` (16 KiB **not supported**; only 4 KB and 64 KB legal for
+  `TCR_EL1.TG0`). The value has not been read on this unit because the
+  architecture has no EL0 access to `ID_AA64MMFR0_EL1`; the EL1 probe prepared in
+  `tools/j8/granule-probe-el1.S` is the confirmation and has not been run. See
+  `FEASIBILITY.md` §2.
 
 ### 1.2 Memory
 

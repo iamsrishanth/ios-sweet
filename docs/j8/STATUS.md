@@ -27,7 +27,7 @@ evidence.
 | Exact device identification | **hardware-verified** | `WORKSPACE-EVIDENCE.md` section 3, `HARDWARE.md` |
 | Partition map / storage type (eMMC, not UFS) | **hardware-verified** | live `/proc/partitions`, `/dev/block/by-name`, device tree |
 | Recovery path and rollback assets | **hardware-verified** *(historical Android use)* + documented | `INSTALL-RECOVERY.md` |
-| Page-size capability (`TGran16`) | **unknown** | documents conflict; EL0 read trapped; EL1 probe built, not flashed |
+| Page-size capability (`TGran16`) | **documented: no 16K** (unit confirmation pending) | Cortex-A53 r0p4 TRM `TGran16 = 0x0`; EL0 access is architecturally absent (SIGILL measured); EL1 probe built, not flashed |
 | XNU kernel built for J8 | **not started** | no J8 machine config yet |
 | J8 shim (4 KiB granule MMU) | **researched** | `shim/mmu.c` is 16 KiB-only |
 | Anything booting on the J8 from this project | **none** | nothing flashed |

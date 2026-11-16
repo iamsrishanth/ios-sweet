@@ -26,11 +26,14 @@ AT_HWCAP=0xff AT_HWCAP2=0x0
 EL0-ID-READ: TRAPPED (SIGILL) - cannot read ID registers at EL0
 ```
 
-The granule value therefore remains **unverified on this unit**. Cortex-A53
-granule support is implementation-defined: Arm's programmer's guide says the
-core supports all three sizes, while an Arm engineer notes that integrations may
-leave 16K disabled and a DragonBoard 410C (also A53) fails to boot a 16K kernel.
-`granule-probe-el1.S` is the experiment that settles it.
+The architecture has **no EL0 access path** for this register: at EL0 the read
+is UNDEFINED (or trapped by FEAT_IDST), so the SIGILL is the required outcome and
+says nothing about the value. The value comes from the core's TRM
+(Cortex-A53 r0p4, DDI 0500J: `TGran16 = 0x0`, **not supported**; `TCR_EL1.TG0`
+allows only 4 KB and 64 KB), corroborated by the `0x1122` cluster value seen in
+Linux. `granule-probe-el1.S` is the on-unit confirmation. An earlier version of
+this probe decoded `TGran4` from the wrong bits and with the wrong polarity;
+that is fixed in `j8probe.c`.
 
 ## Building the EL1 probe image
 
