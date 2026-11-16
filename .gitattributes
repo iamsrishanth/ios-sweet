@@ -1,0 +1,10 @@
+# Keep scripts and sources check-out-safe on Windows: the tools run on Android,
+# Linux and macOS, where CRLF breaks shells and assembly.
+* text=auto
+*.sh text eol=lf
+*.S text eol=lf
+*.py text eol=lf
+*.patch text eol=lf
+*.c text eol=lf
+*.h text eol=lf
+*.md text eol=lf
