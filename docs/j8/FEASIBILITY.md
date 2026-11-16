@@ -70,11 +70,15 @@ does not demonstrate any of this.
   AArch64 probe (`tools/j8/j8probe.c`) ran on the phone and took SIGILL exactly
   as required. The EL0 probe therefore *confirms the access model*, not the
   value.
-- **Not yet measured on this unit:** the value rests on the TRM plus the core
-  revision ID. An EL1 probe (`tools/j8/granule-probe-el1.S`) is built and
-  packaged as a legacy boot image by `tools/j8/build-granule-probe.sh`; it paints
-  the splash green/red and powers off. It has **not been flashed**. Treat it as
-  confirmation of the documented answer, not as the thing that decides it.
+- **Confirmation attempt failed (2026-11-17):** the EL1 probe
+  (`tools/j8/granule-probe-el1.S`) was built, flashed to `boot` (readback
+  verified) and rebooted. The bootloader **rejected it** and entered `BOOT
+  RECOVERY MODE` / Download Mode; the probe never executed, so there is still no
+  on-unit read of the register. The image lacked the ROM boot image's appended
+  DTB and ramdisk, which is the most likely reason. The phone was restored with
+  Odin and the ROM `boot.img`. Details and recovery in `INSTALL-RECOVERY.md`
+  section 5. The documented TRM answer is unchanged; a future confirmation needs
+  a bootloader-accepted image, not just a correct probe payload.
 - The installed kernel's `CONFIG_ARM64_4K_PAGES=y` is a software choice and is
   consistent with the TRM, but is not itself proof of the granule.
 
@@ -159,13 +163,14 @@ J8 in QEMU and on hardware. The EL1 probe is confirmation of the documented
 answer, not the decision.
 
 The confirmation experiment (see `tools/j8/README.md` and
-`INSTALL-RECOVERY.md`):
+`INSTALL-RECOVERY.md`). Its first attempt was rejected by the bootloader; the
+table records the intended procedure and the observed failure:
 
 | Step | Action |
 |---|---|
 | 1 | `tools/j8/build-granule-probe.sh work/gapps/boot-stock.img` → image + sha256 |
 | 2 | verify the rollback image and hash are present on the phone/host |
-| 3 | flash the probe to `boot` from TWRP, reboot |
+| 3 | flash the probe to `boot` from TWRP, reboot (**attempted 2026-11-17: the bootloader rejected the image; no on-unit read**) |
 | 4 | observe: **red band + power off** = `TGran16 = 0` (confirms the TRM); **green band + power off** = `TGran16 = 1` (would contradict the TRM and require a re-think); normal splash/hang = probe did not run |
 | 5 | restore the rollback image before any other work |
 

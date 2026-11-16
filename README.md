@@ -5,8 +5,10 @@
 > **Samsung Galaxy J8 bring-up branch (`samsung-j8-bringup`).** This fork adds a
 > feasibility study, device map, diagnostics and recovery procedure for the
 > Samsung Galaxy J8 (`SM-J810G` / `j8y18lte`, Snapdragon 450 / msm8953). The J8
-> is **not** a working target yet: nothing has been built for it, flashed to it,
-> or booted on it. Start at [`docs/j8/STATUS.md`](docs/j8/STATUS.md), then
+> is **not** a working target: no XNU kernel or iOS userland has been built for
+> it. One diagnostic boot image (an EL1 register probe) was flashed and was
+> **rejected by the bootloader**; Android was restored with Odin. Start at
+> [`docs/j8/STATUS.md`](docs/j8/STATUS.md), then
 > [`docs/j8/FEASIBILITY.md`](docs/j8/FEASIBILITY.md) and
 > [`docs/j8/HARDWARE.md`](docs/j8/HARDWARE.md). J8-specific tools live in
 > [`tools/j8/`](tools/j8/README.md). The text below describes the original

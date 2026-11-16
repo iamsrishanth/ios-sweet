@@ -43,11 +43,14 @@ that is fixed in `j8probe.c`.
 tools/j8/build-granule-probe.sh work/gapps/boot-stock.img /tmp/granule-probe-j8.img
 ```
 
-Expected on a Cortex-A53 integration that disables 16K: the splash band turns
-**red**, and after about ten seconds the phone powers off (PSCI `SYSTEM_OFF`).
-A **green** band means the 16 KiB granule is present. The probe powers off in
-both cases so it cannot reboot-loop on this dead-power-button unit; re-enter
-TWRP with Volume Up + USB and restore the boot image either way.
+**First attempt (2026-11-17): the bootloader rejected this image.** It was
+flashed, readback-verified and rebooted; the phone entered Samsung
+`BOOT RECOVERY MODE` / Download Mode instead of running it. The image has no
+appended DTB and no ramdisk (unlike the ROM's `Image.gz-dtb`), which is the most
+likely reason. Recovery needed Odin over Download Mode because the power button
+is dead; see `docs/j8/INSTALL-RECOVERY.md` section 5.1. **Do not re-flash it as
+built.** A future probe needs a bootloader-accepted boot image (DTB + ramdisk)
+and a staged Odin rollback.
 
 ## Safety rules
 

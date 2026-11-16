@@ -80,7 +80,7 @@ Rules:
   An unverified backup is not a backup.
 - Keep the backups out of git and out of chat.
 
-## 5. Prepared operation: translation-granule probe (NOT yet approved)
+## 5. Translation-granule probe (attempted 2026-11-17; rejected by the bootloader)
 
 Purpose: read `ID_AA64MMFR0_EL1.TGran16` at EL1 and report it without a console
 (see `FEASIBILITY.md` section 2 and `tools/j8/README.md`).
@@ -97,7 +97,9 @@ The image built on 2026-11-17 has sha256
 (4096-byte payload, 6144-byte image). Rebuild it and compare; do not flash a
 different hash without re-reading the payload.
 
-Flash procedure (only with explicit approval, user present):
+Flash procedure (only with explicit approval, user present). The commands are
+the ones that actually ran on 2026-11-17; TWRP's toybox **rejects
+`conv=fsync`**, so use a plain write followed by `sync`.
 
 ```sh
 # 1. device must pass the gate
@@ -113,10 +115,11 @@ adb shell 'sha256sum /sdcard/granule-probe-j8.img /sdcard/boot-rollback.img'
 # 4. boot TWRP, then write ONLY the boot partition
 adb reboot recovery
 adb wait-for-device
-adb shell 'sha256sum /sdcard/granule-probe-j8.img; dd if=/sdcard/granule-probe-j8.img of=/dev/block/by-name/boot bs=1M conv=fsync; sync'
+adb shell 'dd if=/sdcard/granule-probe-j8.img of=/dev/block/by-name/boot bs=2048 count=3; sync'
 
-# 5. verify what landed (read back and hash)
-adb shell 'dd if=/dev/block/by-name/boot bs=1M count=6 2>/dev/null | sha256sum'
+# 5. verify what landed (the probe image is 6144 bytes = 3 x 2048)
+adb shell 'dd if=/dev/block/by-name/boot bs=2048 count=3 2>/dev/null | sha256sum'
+# must print 73fffc9d...b24a
 
 # 6. reboot and observe
 /sbin/twrp reboot        # from a TWRP shell; or the TWRP GUI
@@ -128,28 +131,77 @@ Observe the screen immediately after the reboot:
 |---|---|
 | red band at the top, then the phone powers off | probe ran; `TGran16 = 0` |
 | green band at the top, then the phone powers off | probe ran; `TGran16 = 1` (surprising; re-check) |
-| normal boot animation/ROM, or a hang/reboot loop | probe did not run; restore `boot` |
+| **`BOOT RECOVERY MODE` / `Download mode !!`** | **the bootloader refused the image; the probe did not run** (observed 2026-11-17) |
+| normal Android boot | boot content was not the probe |
 
 The probe powers off in both cases on purpose: a `SYSTEM_RESET` would re-enter
 the same image (it is still the boot partition) and loop forever, which is
 painful on a unit with a dead power button.
 
-Rollback (do this before any other work, whatever the observation):
+### 5.1 Result of the first attempt (2026-11-17, 01:22 IST) — rejected
+
+The image above was written, verified by readback, and the phone was rebooted.
+It did **not** run. The phone was later found in Samsung **`BOOT RECOVERY MODE
+(OMR SPEC)` / `Download mode !!`**, with:
+
+- `Set Warranty Bit : kernel`, `CURRENT BINARY: Custom`, `OEM LOCK: OFF`
+- `QUALCOMM SECUREBOOT: ENABLE (CSB)`, `SECURE DOWNLOAD : ENABLE`
+
+Conclusion: the ABL loaded the image, marked it as a custom kernel, and then
+aborted the boot; the probe's framebuffer paint never appeared. The J8's
+`by-name` list has **no `vbmeta` partition**, so this is Samsung's own boot
+authorisation, not an AVB hash descriptor. The probe image is also structurally
+unusual (a 4 KiB raw `Image`-style payload with **no appended DTB and no
+ramdisk**, unlike the ROM's `Image.gz-dtb` + 778 KB ramdisk), which is the most
+likely trigger. Until that is fixed and the image is accepted, do not re-flash
+it.
+
+### 5.2 Recovery from Download Mode (this worked)
+
+Because the power button is dead, a boot failure lands in Download Mode and the
+only recovery is Odin/Heimdall over USB. The image that restored the phone was
+the ROM boot image, packaged as an Odin AP tar:
+
+```python
+# host-side: tar containing boot.img (the ROM image, sha256 111aa3ed...a2ab)
+import tarfile, os
+with tarfile.open("j8-boot-rollback.tar", "w", format=tarfile.USTAR_FORMAT) as t:
+    ti = tarfile.TarInfo("boot.img"); ti.size = os.path.getsize("boot-stock.img"); ti.mtime = 0
+    t.addfile(ti, open("boot-stock.img", "rb"))
+```
+
+Odin 3.13.1, phone in Download Mode:
+
+1. confirm the blue `ID:COM` port; leave only **Auto Reboot** and **F. Reset
+   Time** ticked (never NAND Erase or Re-Partition),
+2. **AP** = `j8-boot-rollback.tar`,
+3. **Start** → green **PASS!** → phone rebooted into Android.
+
+The restore replaced a Magisk-patched `boot` (the installed image's first 6144
+bytes hashed `3235…`, not the ROM image's `a8139d…`), so **root was lost**. That
+is acceptable for recovery; re-rooting is a separate operation.
+
+Heimdall 1.4.2 on this Windows host detects the phone in Download Mode but
+cannot claim the interface (`libusb error -12`): the Samsung CDC/modem driver is
+bound instead of WinUSB. Odin is the working path here.
+
+### 5.3 TWRP rollback (only if TWRP is reachable)
 
 ```sh
-# TWRP entry: unplug, hold Volume Up, plug USB
-adb shell 'sha256sum /sdcard/boot-rollback.img; dd if=/sdcard/boot-rollback.img of=/dev/block/by-name/boot bs=1M conv=fsync; sync'
+adb shell 'dd if=/sdcard/boot-rollback.img of=/dev/block/by-name/boot bs=1024 count=12782; sync'
+adb shell 'dd if=/dev/block/by-name/boot bs=1024 count=12782 2>/dev/null | sha256sum'
 /sbin/twrp reboot
 ```
 
 The rollback image must hash to
-`111aa3ed0a5191ada9e1b32aa7ed82d495f27df2ab67561415c58ca2b873a2ab` (the Havoc
-`boot` image kept for this purpose). If it does not, stop and re-copy it.
+`111aa3ed0a5191ada9e1b32aa7ed82d495f27df2ab67561415c58ca2b873a2ab` (the ROM
+`boot` image). If it does not, stop and re-copy it.
 
 ## 6. Risks and irreversible consequences
 
 | Risk | Consequence | Mitigation |
 |---|---|---|
+| Bootloader refuses the image | phone lands in Download Mode with no adb; recovery needs Odin/Heimdall (power button is dead) | use a boot image the ABL accepts (ROM image, or one with a valid DTB/ramdisk); stage Odin and the rollback tar before flashing |
 | Writing the wrong partition | identity/calibration loss, no telephony, no recovery | allow-list of partitions; never write by number, only by name; read the command twice |
 | Interrupted write | unbootable `boot` (recoverable) or worse | stable USB, charged battery, `conv=fsync`, verify readback |
 | Corrupting the bootloader chain | **hard brick**, no software recovery known here | never write `sbl1`, `aboot`, `tz`, `rpm`, `devcfg`, `lksecapp`, `keymaster`, `cmnlib*`, `ddr`, `sec`, `pad` |
@@ -163,15 +215,29 @@ become unbootable and Download Mode is unreachable, this unit has no known
 software recovery path in this workspace. That is why only `boot` is written in
 the prepared operation and why `recovery` is off-limits.
 
-## 7. Not validated
+## 7. Validated and not validated
 
-- No image built by this project has been flashed.
-- Download Mode reachability with a dead power button is unknown.
-- The bootloader's acceptance of the probe image is untested (evidence from the
-  existing Havoc image suggests unsigned v0 images boot).
+Validated on 2026-11-17:
+
+- The read-only compatibility gate passes on the unit.
+- TWRP adb, the `boot` write (6144 bytes), and the readback hash check work.
+- A failed boot lands in Download Mode; **Odin 3.13.1 with the ROM `boot.img`
+  AP tar restores Android** (observed PASS and a booted system).
+- Heimdall 1.4.2 cannot flash on this host (Samsung driver bound; libusb -12).
+
+Not validated / open:
+
+- The bootloader's acceptance of a custom probe image: the first attempt was
+  **rejected** (section 5.1). Whether an image with an appended DTB + ramdisk is
+  accepted is untested.
 - The probe's framebuffer assumption (`splash_region` at `0x90001000`, 720 wide,
   BGRA) is read from the device tree but has not been visually confirmed at
   kernel hand-off.
+- The installed `boot` before the experiment was not the ROM image (likely
+  Magisk-patched). No full backup of that exact image was taken; only the
+  first 6144 bytes were read back (hash `3235…`). Root was lost in the restore.
 - TWRP's `sha256sum` availability: the handover records a limited toybox. If
   `sha256sum` is missing, use `md5sum` and compare against a host-side hash, and
   record which tool was used.
+- Download Mode key combos with a dead power button remain unverified; this
+  fallback was entered by the bootloader itself, not by a key combo.

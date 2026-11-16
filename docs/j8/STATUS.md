@@ -27,7 +27,7 @@ evidence.
 | Exact device identification | **hardware-verified** | `WORKSPACE-EVIDENCE.md` section 3, `HARDWARE.md` |
 | Partition map / storage type (eMMC, not UFS) | **hardware-verified** | live `/proc/partitions`, `/dev/block/by-name`, device tree |
 | Recovery path and rollback assets | **hardware-verified** *(historical Android use)* + documented | `INSTALL-RECOVERY.md` |
-| Page-size capability (`TGran16`) | **documented: no 16K** (unit confirmation pending) | Cortex-A53 r0p4 TRM `TGran16 = 0x0`; EL0 access is architecturally absent (SIGILL measured); EL1 probe built, not flashed |
+| Page-size capability (`TGran16`) | **documented: no 16K** (unit confirmation failed) | Cortex-A53 r0p4 TRM `TGran16 = 0x0`; EL0 access is architecturally absent (SIGILL measured); the EL1 probe image was built and flashed but the **bootloader rejected it**, so no on-unit read exists |
 | XNU kernel built for J8 | **not started** | no J8 machine config yet |
 | J8 shim (4 KiB granule MMU) | **researched** | `shim/mmu.c` is 16 KiB-only |
 | Anything booting on the J8 from this project | **none** | nothing flashed |
@@ -69,7 +69,9 @@ evidence.
 | 2026-11-17 | EL0 ID-register probe (`tools/j8/j8probe.c`) | AArch64 EL0 runs; `MRS ID_AA64MMFR0_EL1` traps with SIGILL | `tools/j8/README.md` |
 | 2026-11-17 | Compatibility gate (`tools/j8/j8-compat-check.sh`) | `RESULT PASS` on model/partitions/kernel | tool output |
 | 2026-11-17 | Boot image round-trip (`mkbootv0.py selftest`) | byte-identical | tool output |
-| 2026-11-17 | EL1 granule probe image build | image built, sha256 `73fffc...b24a`, **not flashed** | `INSTALL-RECOVERY.md` section 5 |
+| 2026-11-17 | EL1 granule probe image build | image built, sha256 `73fffc...b24a` | `INSTALL-RECOVERY.md` section 5 |
+| 2026-11-17 01:22 | EL1 probe flashed to `boot`, readback verified, rebooted | **bootloader rejected it** (`BOOT RECOVERY MODE`/Download Mode); probe did not run | `INSTALL-RECOVERY.md` section 5.1 |
+| 2026-11-17 ~01:50 | Recovery: Odin 3.13.1 AP tar with the ROM `boot.img` | **PASS**, Android booted; root lost (boot had been Magisk-patched) | `INSTALL-RECOVERY.md` section 5.2 |
 | - | XNU build for J8 | not attempted | - |
 | - | Any J8 boot of XNU/iOS | not attempted | - |
 
@@ -83,7 +85,10 @@ Documentation and tooling, not a port:
   (assembly + boot-image builder), legacy boot image parser/packer with a
   round-trip self-test, and a read-only device compatibility gate. All of these
   were built/run except the EL1 probe, which needs a flash.
-- No XNU patch, no shim change, no kernel build, no iOS image, no installation.
+- No XNU patch, no shim change, no kernel build, no iOS image. One diagnostic
+  boot image (the EL1 granule probe) was flashed and **rejected by the
+  bootloader**; the phone was restored with Odin. That is not a port
+  installation.
 
 ## 6. App Store: separate milestone, currently blocked
 
@@ -104,9 +109,11 @@ device Apple recognises, and is out of scope for this port.
 
 ## 7. Next concrete steps (dependency order)
 
-1. **Run the EL1 granule probe** with the user present (recoverable `boot`
-   flash), then restore the rollback image. This settles `TGran16` and decides
-   whether the 16K or 4K machine config is the baseline.
+1. **Do not re-flash the EL1 probe as built.** The first attempt was rejected by
+   the bootloader (no appended DTB/ramdisk; see `INSTALL-RECOVERY.md` section
+   5.1). Either build a bootloader-acceptable image (DTB + ramdisk, and a staged
+   Odin rollback) or accept the TRM as the answer for `TGran16` and spend the
+   effort on the kernel instead.
 2. **Add a J8 machine config to XNU** (4K-granule variant, GICv2 bases, 8 CPUs,
    2 clusters, timer PPI 19) and compile it in CI; boot it in QEMU `virt` with
    4 KiB page tables and a 16 KiB advertised page size.

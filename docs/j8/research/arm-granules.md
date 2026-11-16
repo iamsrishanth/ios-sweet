@@ -184,9 +184,11 @@ could run here, and it is a shadow-paging hypervisor, not a config flag.
 
 Residual uncertainty:
 
-- The register was never read on this handset: EL0 cannot [1][6], and the EL1 probe
-  is built but not flashed. The answer rests on TRM plus revision ID — sound, but
-  documentation rather than a measurement of this unit.
+- The register was never read on this handset: EL0 cannot [1][6], and the EL1
+  probe was **rejected by the bootloader** on 2026-11-17 (see
+  `docs/j8/INSTALL-RECOVERY.md` section 5.1), so no on-unit read exists. The
+  answer rests on TRM plus revision ID — sound, but documentation rather than a
+  measurement of this unit.
 - The chain assumes the phone's r0p4 is a stock A53 with unmodified ID values. No
   evidence contradicts it, and an SoC cannot add a granule the core's MMU lacks,
   but a fused-off or errata-affected configuration is not excluded by any source
