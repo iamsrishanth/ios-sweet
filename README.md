@@ -2,6 +2,16 @@
 
 **Apple's iOS 16 running on a Redmi Note 10 Pro.**
 
+> **Samsung Galaxy J8 bring-up branch (`samsung-j8-bringup`).** This fork adds a
+> feasibility study, device map, diagnostics and recovery procedure for the
+> Samsung Galaxy J8 (`SM-J810G` / `j8y18lte`, Snapdragon 450 / msm8953). The J8
+> is **not** a working target yet: nothing has been built for it, flashed to it,
+> or booted on it. Start at [`docs/j8/STATUS.md`](docs/j8/STATUS.md), then
+> [`docs/j8/FEASIBILITY.md`](docs/j8/FEASIBILITY.md) and
+> [`docs/j8/HARDWARE.md`](docs/j8/HARDWARE.md). J8-specific tools live in
+> [`tools/j8/`](tools/j8/README.md). The text below describes the original
+> Redmi Note 10 Pro port and remains accurate for that device only.
+
 This project ports Apple's open-source XNU kernel (xnu-8796, the iOS 16 generation) to the Xiaomi Redmi Note 10 Pro (`sweet`, Qualcomm SM7150 / Snapdragon 732G). On top of it runs the **unmodified iOS 16.7.16 (20H392) userland of the iPhone X**: launchd, the system daemons, backboardd, SpringBoard and the stock apps.
 
 As of **2026-10-18** the phone boots to the **iOS home screen**. You can unlock it, open Settings, pull down Control Center and the notification center, and use the touchscreen and the hardware buttons. Rendering runs entirely on the CPU; there is no GPU driver.

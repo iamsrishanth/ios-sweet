@@ -8,3 +8,6 @@ shim/out/
 xnu/out/
 xnu/out-*/
 __pycache__/
+# J8 research notes live under docs/ and must not be caught by research/
+!docs/j8/research/
+!docs/j8/research/**
