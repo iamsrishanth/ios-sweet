@@ -13,13 +13,17 @@ commands that are prepared but **not yet run**.
 | Reference (GPU/Wi-Fi) | `joranv1/ios-sailfish` @ `6f27e41ff249f2680540ebe8ee5ab982c5e641c9` (2026-10-22) | `git log` |
 | XNU | `apple-oss-distributions/xnu` tag `xnu-8796.101.5`, commit `aca3beaa3dfbd42498b42c5e5ce20a938e6554e5` | Apple public source |
 | XNU build harness | `blacktop/darwin-xnu-build` @ `663906528d1cd5ea8fde7de6f16de73db9511549` | `.github/workflows/xnu.yml` |
-| Kernel CI runner | GitHub `macos-14`, Xcode 15.x, KDK 13.5 | workflow |
+| Kernel CI runner | GitHub **`macos-15`**, Xcode 16.x (the pinned `macos-14` image was retired on 2026-11-02 and its jobs are cancelled before a runner is assigned) | workflow |
 | iOS userland | iPhone X (`iPhone10,3` / D22AP) iOS 16.7.16 build `20H392` | user-supplied IPSW, **not in git** |
 | Probe toolchain | Zig (pip `ziglang`) or `aarch64-linux-gnu-gcc`; Python 3.11 | host |
 
 A different macOS/Xcode/KDK combination is not guaranteed to produce the same
 kernel; the reference project's CI exists because those three are coupled (see
-the `iig`/IORPC comment in the workflow).
+the `iig`/IORPC comment in the workflow). Moving from macos-14 (Xcode 15) to
+macos-15 (Xcode 16+) changes `iig`: it emits `IORPC.kernelContent`, which
+xnu-8796 does not have. `xnu/patches/0083-iig-kernelcontent.patch` backports the
+field (as in current xnu) and is **prepared, not yet shown to be sufficient**;
+the first macos-15 run will tell.
 
 ## 2. Host roles
 
