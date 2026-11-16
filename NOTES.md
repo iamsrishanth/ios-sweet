@@ -1,5 +1,42 @@
 # iOS 16 on sweet (Redmi Note 10 Pro, SM7150) - working notes
 
+## J8 handoff (2026-11-17) - Samsung Galaxy J8, branch `samsung-j8-bringup`
+
+**This is a feasibility/tooling branch, not a working port. Nothing was built
+for the J8, flashed to it, or booted on it.** The sweet notes below are unchanged
+and still apply to the Redmi device.
+
+State at end of session:
+
+- Repo: `iamsrishanth/ios-sweet`, branch `samsung-j8-bringup`, HEAD
+  `900c4299b0947617587bbb10099025c5d9a5f36f` (docs `dcef004`, research `94910b0`,
+  tools `900c429`). No CI run was made for J8.
+- Device: `SM-J810G` / `j8y18lte` / msm8953, bootloader `J810GDDU6CWH2`,
+  Android 11 Havoc-OS currently installed, TWRP on `recovery`, **dead power
+  button**, **no SIM fitted** (`gsm.sim.state=ABSENT`).
+- Confirmed on hardware: eMMC only (`7824900.sdhci`, no UFS), GICv2
+  (`qcom,msm-qgic2`, 0x0b000000 / 0x0b002000), WCNSS/prima Wi-Fi,
+  `a506_zap` named in the DT but not readable from the shell, Zinitix BT532
+  touch, SM5708 charger, QDSP6 + TFA9896 audio, IPA/QMI modem, two DDR banks
+  (2 GiB at 0x80000000, 1.75 GiB at 0x1_0000_0000).
+- Page size: **unverified.** EL0 `MRS ID_AA64MMFR0_EL1` traps (SIGILL, measured).
+  Arm's documents conflict on Cortex-A53 16K support. XNU 8796 has a
+  4 KiB-granule path that still advertises 16 KiB pages (`ARM_PGSHIFT` vs
+  `PAGE_SHIFT_CONST`, `PAGE_RATIO`), so the port is not proven dead either way.
+- EL1 granule probe: image built, sha256
+  `661884831810b34b46818829453e37fc8ab68d405e5e01f3a38c48e7d8a2cfd7`,
+  **NOT flashed**. Procedure and rollback in `docs/j8/INSTALL-RECOVERY.md`.
+- Tooling validated locally: `mkbootv0.py selftest` round-trips the known-good
+  v0 boot image byte-identically; `j8-compat-check.sh` prints `RESULT PASS` on
+  the phone; `j8probe` runs and reports the trap.
+- Rollback anchor unchanged: Havoc `boot` image sha256
+  `111aa3ed0a5191ada9e1b32aa7ed82d495f27df2ab67561415c58ca2b873a2ab`.
+
+Next actions, in order: (1) run the EL1 probe with the user present and restore
+the rollback; (2) add a 4K-granule J8 machine config and compile it in CI;
+(3) port the shim to 4 KiB tables; (4) SDCC/eMMC driver. Details and gates in
+`docs/j8/FEASIBILITY.md` section 5 and `docs/j8/STATUS.md` section 7.
+
 ## Agent handoff / active work (2026-10-15, latest)
 
 ### >>> UPDATE 2026-10-18 (read first, then the 10-17 handoff below) <<<
