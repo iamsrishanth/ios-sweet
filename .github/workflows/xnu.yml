@@ -23,7 +23,10 @@ on:
 
 concurrency:
   group: xnu-${{ github.ref }}
-  cancel-in-progress: true
+  # Do not cancel: on the constrained macOS pools an older run can sit queued
+  # for many minutes, and cancel-in-progress then kills the newer run with
+  # "a higher priority waiting request exists" as soon as the old one wakes up.
+  cancel-in-progress: false
 
 env:
   DXB_REPO: https://github.com/blacktop/darwin-xnu-build
@@ -106,7 +109,12 @@ jobs:
         if: always()
         run: |
           mkdir -p out/kdk-libs
-          for lib in /Library/Developer/KDKs/*/System/Library/KernelSupport/lib*.a; do
+          shopt -s nullglob
+          libs=(/Library/Developer/KDKs/*/System/Library/KernelSupport/lib*.a)
+          if [ ${#libs[@]} -eq 0 ]; then
+            echo "no KDK KernelSupport libs found" | tee out/kdk-libs/none.txt
+          fi
+          for lib in "${libs[@]}"; do
             b=$(basename "$lib" .a)
             ar t "$lib" > "out/kdk-libs/$b.members.txt" 2>&1 || true
             nm -m "$lib" > "out/kdk-libs/$b.nm.txt" 2>&1 || true
