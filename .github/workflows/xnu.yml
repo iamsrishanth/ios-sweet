@@ -36,11 +36,13 @@ jobs:
   build:
     # macos-14 was retired on 2026-11-02 (GitHub changelog, runner-images
     # #13518): jobs on that label are cancelled before a runner is assigned.
-    # macos-15 is the current Intel-compatible image, but it ships Xcode 16+,
-    # whose iig emits IORPC.kernelContent that xnu-8796 lacks (the reason the
-    # old comment pinned macos-14/Xcode 15). If the build fails in IOKit MIG,
-    # that incompatibility is the cause, not the machine config.
-    runs-on: macos-15
+    # The arm64 macos-15 pool then failed to acquire a runner for 15 minutes
+    # ("not acquired by Runner of type hosted ... capacity constraints"), so
+    # use the Intel image; XNU is a cross-build for arm64 anyway. macos-15
+    # ships Xcode 16+, whose iig emits IORPC.kernelContent that xnu-8796 lacks
+    # (patch 0083 backports it). If the build fails in IOKit MIG, that
+    # incompatibility is the cause, not the machine config.
+    runs-on: macos-15-intel
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
