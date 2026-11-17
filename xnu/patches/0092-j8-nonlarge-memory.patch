@@ -1,0 +1,67 @@
+diff --git a/makedefs/MakeInc.def b/makedefs/MakeInc.def
+index b88ce3b..89fc4b3 100644
+--- a/makedefs/MakeInc.def
++++ b/makedefs/MakeInc.def
+@@ -336,6 +336,14 @@ ifneq ($(filter $(PLATFORM),MacOSX),)
+ LARGE_MEMORY_DEFINE=-DARM_LARGE_MEMORY=1
+ ARM64_PLKSEG_ADDR  =0xfffffe0004004000
+ ARM64_LINK_ADDR    =0xfffffe0007004000
++ifeq ($(CURRENT_MACHINE_CONFIG),J8)
++# J8: use the non-large-memory kernel VA layout. The 4 KiB bootstrap does not
++# walk the -2 TiB layout on this part; the 64 GiB layout fits the normal
++# 39-bit TTBR1 (T1SZ 25) and the existing L1 bootstrap.
++LARGE_MEMORY_DEFINE=
++ARM64_PLKSEG_ADDR  =0xfffffff004004000
++ARM64_LINK_ADDR    =0xfffffff007004000
++endif
+ endif
+ 
+ 
+diff --git a/osfmk/arm64/proc_reg.h b/osfmk/arm64/proc_reg.h
+index 4f13fe6..a868a38 100644
+--- a/osfmk/arm64/proc_reg.h
++++ b/osfmk/arm64/proc_reg.h
+@@ -978,12 +978,11 @@
+ #else /* __ARM_16K_PG__ */
+ #if defined(ARM64_BOARD_CONFIG_J8)
+ /*
+- * J8: the macOS-platform kernel is linked at -2 TiB. A 39-bit TTBR1
+- * (T1SZ 25) does not cover it; the 16 KiB SWEET path uses 47 bits with the
+- * same link address. Use 17 (47-bit) with the L0 bootstrap table; the L0/L1
+- * indices are the same as for the exact 41-bit size.
++ * J8: build on the non-large-memory layout (makedefs/MakeInc.def). The kernel
++ * base is 0xfffffff000000000 and the link address 0xfffffff007004000, which
++ * the normal 39-bit TTBR1 (T1SZ 25) covers; no L0 bootstrap table is used.
+  */
+-#define T1SZ_BOOT 17ULL
++#define T1SZ_BOOT 25ULL
+ #elif __ARM64_PMAP_SUBPAGE_L1__
+ #define T1SZ_BOOT 26ULL
+ #else /* !__ARM64_PMAP_SUBPAGE_L1__ */
+diff --git a/osfmk/arm64/start.s b/osfmk/arm64/start.s
+index 3565cbb..23b2d69 100644
+--- a/osfmk/arm64/start.s
++++ b/osfmk/arm64/start.s
+@@ -687,10 +687,10 @@ Lkernelcache_base_found:
+ 	 */
+ 	mov		x1, x25
+ 	add		x3, x1, PGBYTES
+-#if defined(ARM64_BOARD_CONFIG_J8)
++#if defined(ARM64_BOARD_CONFIG_J8) && defined(ARM_LARGE_MEMORY)
+ 	/*
+-	 * J8: T1SZ_BOOT is 23 (41-bit), so the KVA walk starts at L0.
+-	 * x13 - KVA L0 page; x2 - free page after the L0/L1 roots.
++	 * J8 + large memory: T1SZ_BOOT is 23 (41-bit), so the KVA walk starts
++	 * at L0. The non-large-memory J8 build uses the normal L1 root.
+ 	 */
+ 	add		x13, x3, PGBYTES
+ 	add		x2, x13, PGBYTES
+@@ -777,7 +777,7 @@ common_start:
+ 	mov		x19, lr
+ 	bl		EXT(set_mmu_ttb)
+ 	mov		lr, x19
+-#if defined(ARM64_BOARD_CONFIG_J8)
++#if defined(ARM64_BOARD_CONFIG_J8) && defined(ARM_LARGE_MEMORY)
+ 	add		x0, x25, #(2 * PGBYTES)		// KVA L0 root
+ #else
+ 	add		x0, x25, PGBYTES
