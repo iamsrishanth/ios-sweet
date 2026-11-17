@@ -1,0 +1,16 @@
+diff --git a/makedefs/MakeInc.def b/makedefs/MakeInc.def
+index 89fc4b3..6eb6426 100644
+--- a/makedefs/MakeInc.def
++++ b/makedefs/MakeInc.def
+@@ -62,7 +62,10 @@ MACHINE_FLAGS_ARM64_T6000 = -DARM64_BOARD_CONFIG_T6000 		-mcpu=apple-a14
+ MACHINE_FLAGS_ARM64_VMAPPLE = -DARM64_BOARD_CONFIG_VMAPPLE              -march=armv8.5a
+ MACHINE_FLAGS_ARM64_BCM2837 = -DARM64_BOARD_CONFIG_BCM2837
+ MACHINE_FLAGS_ARM64_SWEET = -DARM64_BOARD_CONFIG_SWEET                -march=armv8.2-a+crypto
+-MACHINE_FLAGS_ARM64_J8 = -DARM64_BOARD_CONFIG_J8                  -march=armv8-a+crypto
++# J8: Cortex-A53 r0p4 is ARMv8.0 and has no LSE. -mcpu keeps clang from
++# emitting ldadd/ldclr even though the macOS target CPU would allow LSE
++# (-march=armv8-a alone did not: lck_grp_reference contained ldadd).
++MACHINE_FLAGS_ARM64_J8 = -DARM64_BOARD_CONFIG_J8                  -mcpu=cortex-a53+crypto
+ 
+ 
+ #
