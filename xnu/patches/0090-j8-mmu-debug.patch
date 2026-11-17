@@ -1,0 +1,32 @@
+diff --git a/osfmk/arm64/start.s b/osfmk/arm64/start.s
+index 6a15ed6..3565cbb 100644
+--- a/osfmk/arm64/start.s
++++ b/osfmk/arm64/start.s
+@@ -869,6 +869,27 @@ common_start:
+ 	PAC_INIT_KEY_STATE tmp=x0, tmp2=x1
+ #endif /* HAS_APPLE_PAC */
+ 
++#if defined(ARM64_BOARD_CONFIG_J8)
++	/*
++	 * J8 debug (temporary): store the exact MMU state used at enable time
++	 * into the last bootstrap page; the QEMU harness reads it with pmemsave.
++	 */
++	add		x9, x25, #0x20, lsl #12
++	mrs		x10, tcr_el1
++	str		x10, [x9, #0]
++	mrs		x10, ttbr0_el1
++	str		x10, [x9, #8]
++	mrs		x10, ttbr1_el1
++	str		x10, [x9, #16]
++	mrs		x10, sctlr_el1
++	str		x10, [x9, #24]
++	add		x11, x25, #0x2000
++	add		x11, x11, #0xfe0
++	ldr		x10, [x11]
++	str		x10, [x9, #32]
++	dsb		sy
++#endif /* ARM64_BOARD_CONFIG_J8 */
++
+ 	// Enable caches, MMU, ROP and JOP
+ 	MOV64   x0, SCTLR_EL1_DEFAULT
+ 	MSR_SCTLR_EL1_X0
