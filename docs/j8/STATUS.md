@@ -28,7 +28,7 @@ evidence.
 | Partition map / storage type (eMMC, not UFS) | **hardware-verified** | live `/proc/partitions`, `/dev/block/by-name`, device tree |
 | Recovery path and rollback assets | **hardware-verified** *(historical Android use)* + documented | `INSTALL-RECOVERY.md` |
 | Page-size capability (`TGran16`) | **documented: no 16K** (unit confirmation failed) | Cortex-A53 r0p4 TRM `TGran16 = 0x0`; EL0 access is architecturally absent (SIGILL measured); the EL1 probe image was built and flashed but the **bootloader rejected it**, so no on-unit read exists |
-| XNU kernel built for J8 | **in progress** | patch 0082 (J8 machine config: 4K granule, GICv2 bases, 8 CPUs) and 0083 (Xcode 16 iig backport); CI run dispatched with `machine_config=J8`, result pending |
+| XNU kernel built for J8 | **build-verified, not bootable** | CI run 44028918918 (commit `105df05`): `kernel.development.j8`, 16.5 MB, SHA-256 `38adfd548d5c6f1865aa778f3e5d554e86b682a1a1fb37877566bbac12de6dc0`, plain ARM64 Mach-O; patches 0082-0086 |
 | J8 shim (4 KiB granule MMU) | **researched** | `shim/mmu.c` is 16 KiB-only |
 | Anything booting on the J8 from this project | **none** | nothing flashed |
 
@@ -72,8 +72,8 @@ evidence.
 | 2026-11-17 | EL1 granule probe image build | image built, sha256 `73fffc...b24a` | `INSTALL-RECOVERY.md` section 5 |
 | 2026-11-17 01:22 | EL1 probe flashed to `boot`, readback verified, rebooted | **bootloader rejected it** (`BOOT RECOVERY MODE`/Download Mode); probe did not run | `INSTALL-RECOVERY.md` section 5.1 |
 | 2026-11-17 ~01:50 | Recovery: Odin 3.13.1 AP tar with the ROM `boot.img` | **PASS**, Android booted; root lost (boot had been Magisk-patched) | `INSTALL-RECOVERY.md` section 5.2 |
-| - | XNU build for J8 | not attempted | - |
-| - | Any J8 boot of XNU/iOS | not attempted | - |
+| 2026-11-17 05:43-06:19 UTC | J8 kernel build in GitHub CI (runs 43955617494 -> 43964523225 -> 44026100030 -> **44028918918**) | **success**: `kernel.development.j8` compiled and linked; earlier runs exposed the 4 KiB pmap assertion, HFS staging, component flags and two link stubs, all fixed | `BUILD.md` section 4 |
+| - | Any J8 boot of XNU/iOS | not attempted: no GICv2 delivery, shim, device tree or drivers | - |
 
 ## 5. What this task implemented
 
@@ -85,9 +85,14 @@ Documentation and tooling, not a port:
   (assembly + boot-image builder), legacy boot image parser/packer with a
   round-trip self-test, and a read-only device compatibility gate. All of these
   were built/run except the EL1 probe, which needs a flash.
-- No XNU patch, no shim change, no kernel build, no iOS image. One diagnostic
-  boot image (the EL1 granule probe) was flashed and **rejected by the
-  bootloader**; the phone was restored with Odin. That is not a port
+- XNU patches 0082-0086 and CI changes: the J8 4 KiB machine config and build
+  target; the Xcode 16 `IORPC.kernelContent` backport; the iOS user-VA limit
+  that the 4 KiB commpage requires; staging of the ios-sweet sources and their
+  per-object flags for J8; and two link stubs. CI builds and links
+  `kernel.development.j8` (run 44028918918).
+- Still no shim change, no device tree, no bootable kernel and no iOS image.
+  The one flashed diagnostic image (the EL1 granule probe) was **rejected by
+  the bootloader**; the phone was restored with Odin. That is not a port
   installation.
 
 ## 6. App Store: separate milestone, currently blocked

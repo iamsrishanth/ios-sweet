@@ -2,16 +2,18 @@
 
 ## J8 handoff (2026-11-17) - Samsung Galaxy J8, branch `samsung-j8-bringup`
 
-**This is a feasibility/tooling branch, not a working port.** One diagnostic
-image was flashed to `boot` and was **rejected by the bootloader**; no XNU kernel
-or iOS userland has been built, flashed or booted for the J8. The sweet notes
-below are unchanged and still apply to the Redmi device.
+**This is a feasibility/bring-up branch, not a working port.** One diagnostic
+image was flashed to `boot` and was **rejected by the bootloader**. The J8 XNU
+kernel now **compiles and links in CI** (`kernel.development.j8`, run
+44028918918), but it has never been booted and has no GICv2, shim, device tree
+or device drivers. The sweet notes below are unchanged and still apply to the
+Redmi device.
 
 State at end of session:
 
-- Repo: `iamsrishanth/ios-sweet`, branch `samsung-j8-bringup`, at the head shown
-  by `git log` (docs, research notes, tools and this handoff). No CI run was made
-  for J8.
+- Repo: `iamsrishanth/ios-sweet`, branch `samsung-j8-bringup`, head `105df05`
+  (XNU patches 0082-0086, docs, research notes, tools and this handoff). CI run
+  **44028918918** built and linked the J8 kernel; the artifact is not committed.
 - Device: `SM-J810G` / `j8y18lte` / msm8953, bootloader `J810GDDU6CWH2`,
   Android 11 Havoc-OS installed again after recovery, TWRP on `recovery`,
   **dead power button**, **no SIM fitted** (`gsm.sim.state=ABSENT`).
@@ -39,17 +41,28 @@ State at end of session:
   v0 boot image byte-identically; `j8-compat-check.sh` prints `RESULT PASS` on
   the phone; `j8probe` runs and reports the trap; the probe image builds and its
   readback verifies.
+- XNU J8 build (2026-11-17 06:19 UTC): CI run **44028918918** succeeded on
+  `macos-15-intel` (Xcode 16, KDK 13.5 22G74) with `machine_config=J8`.
+  `kernel.development.j8` is 16,545,368 bytes, SHA-256
+  `38adfd548d5c6f1865aa778f3e5d554e86b682a1a1fb37877566bbac12de6dc0`, plain
+  arm64 (not arm64e). It proves the 4 KiB-granule config compiles and links;
+  GICv2 delivery, the 4 KiB shim, an ADT and all device drivers are still
+  missing, so it cannot boot.
+- CI infrastructure: `macos-14` was retired on 2026-11-02; the `macos-15` arm64
+  pool failed to acquire a runner for 15 minutes, so the workflow uses
+  `macos-15-intel`. Xcode 16's `iig` needed the `IORPC.kernelContent` backport
+  (patch 0083). See `docs/j8/BUILD.md` section 4 for the exact recipe and result.
 - Rollback anchors: ROM `boot.img` sha256
   `111aa3ed0a5191ada9e1b32aa7ed82d495f27df2ab67561415c58ca2b873a2ab`; Odin AP tar
   sha256 `ee766f98ea5682f0602c23aa3f3e1ce770551f904a437a9a2bb1d61b8d3c9a82`.
 
 Next actions, in order: (1) **do not re-flash the probe as built** (the
-bootloader rejected it); if confirmation is still wanted, package it as a
-bootloader-accepted image (appended DTB + ramdisk) and stage Odin first, or
-accept the TRM answer and move on; (2) add a 4K-granule J8 machine config and
-compile it in CI; (3) port the shim to 4 KiB tables; (4) SDCC/eMMC driver.
-Details and gates in `docs/j8/FEASIBILITY.md` section 5 and
-`docs/j8/STATUS.md` section 7.
+bootloader rejected it); (2) port the shim to 4 KiB-granule tables and add the
+GICv2 interrupt driver (distributor/CPU interface, timer PPI 19, SGIs) — the
+two boot prerequisites the linked kernel still lacks; (3) write a J8 ADT/device
+tree for the shim and QEMU harness; (4) SDCC/eMMC driver; (5) display, touch,
+keys, then GPU, Wi-Fi/BT, modem/audio, App Store. Details and gates in
+`docs/j8/FEASIBILITY.md` section 5 and `docs/j8/STATUS.md` section 7.
 
 ## Agent handoff / active work (2026-10-15, latest)
 

@@ -13,7 +13,7 @@ commands that are prepared but **not yet run**.
 | Reference (GPU/Wi-Fi) | `joranv1/ios-sailfish` @ `6f27e41ff249f2680540ebe8ee5ab982c5e641c9` (2026-10-22) | `git log` |
 | XNU | `apple-oss-distributions/xnu` tag `xnu-8796.101.5`, commit `aca3beaa3dfbd42498b42c5e5ce20a938e6554e5` | Apple public source |
 | XNU build harness | `blacktop/darwin-xnu-build` @ `663906528d1cd5ea8fde7de6f16de73db9511549` | `.github/workflows/xnu.yml` |
-| Kernel CI runner | GitHub **`macos-15`**, Xcode 16.x (the pinned `macos-14` image was retired on 2026-11-02 and its jobs are cancelled before a runner is assigned) | workflow |
+| Kernel CI runner | GitHub **`macos-15-intel`**, Xcode 16.x (the pinned `macos-14` image was retired on 2026-11-02 and its jobs are cancelled before a runner is assigned) | workflow |
 | iOS userland | iPhone X (`iPhone10,3` / D22AP) iOS 16.7.16 build `20H392` | user-supplied IPSW, **not in git** |
 | Probe toolchain | Zig (pip `ziglang`) or `aarch64-linux-gnu-gcc`; Python 3.11 | host |
 
@@ -65,30 +65,51 @@ The `<boot-stock.img>` used locally is the Havoc boot image kept for rollback
 It is device data and is not committed. Any v0 image that boots on the phone can
 supply the same header geometry; the packer refuses v1+ headers on purpose.
 
-## 4. Building the kernel (prepared, not run for J8)
+## 4. Building the kernel (verified for J8: compilation and link only)
 
-The upstream workflow is used unchanged:
+The workflow is the upstream one, with `machine_config=J8`:
 
 ```sh
-gh workflow run xnu.yml -R iamsrishanth/ios-sweet \
-  -f macos_version=13.5 -f kernel_config=DEVELOPMENT -f machine_config=SWEET
-gh run download <RUN_ID> -R iamsrishanth/ios-sweet -n xnu-kernel -D xnu/out
+gh workflow run xnu.yml -R iamsrishanth/ios-sweet --ref samsung-j8-bringup \
+  -f macos_version=13.5 -f kernel_config=DEVELOPMENT -f machine_config=J8
+gh run download <RUN_ID> -R iamsrishanth/ios-sweet -n xnu-kernel -D work/j8-kernel
 ```
 
-For a J8 kernel this needs, first:
+Verified run: **44028918918** (2026-11-17 06:19 UTC), commit `105df05`,
+`conclusion=success`. Produced:
 
-1. a `J8` machine config (`pexpert/pexpert/arm64/J8.h`, `MakeInc.def`,
-   `board_config.h`, the `pexpert` Makefile) with `ARM_PGSHIFT = 12`, i.e. **no
-   `__ARM_16K_PG__`**, `MAX_CPUS 8`, `MAX_CPU_CLUSTERS 2`, cache line 64 B,
-   GICv2 bases (`0x0b000000` / `0x0b002000`), timer PPI 19, PSCI/SMC;
-2. a shim that builds 4 KiB-granule tables and no longer requires the 16 KiB
-   granule (`shim/mmu.c`, `shim/shim.c`);
-3. the J8 board devices (SDCC/eMMC, display, touch, keys) added as separate
-   patches so the reference ports stay intact.
+| Field | Value |
+|---|---|
+| File | `kernel.development.j8` |
+| Size | 16,545,368 bytes (15.78 MiB) |
+| SHA-256 | `38adfd548d5c6f1865aa778f3e5d554e86b682a1a1fb37877566bbac12de6dc0` |
+| Mach-O | `cputype 0x0100000c` (ARM64), `cpusubtype 0` (plain arm64, **not arm64e**), `MH_EXECUTE` |
+| Toolchain | GitHub `macos-15-intel`, Xcode 16 (MacOSX15.0 SDK), KDK 13.5 build `22G74` installed by the harness |
+| Config | `config/MASTER.arm64.j8`, `-DARM64_BOARD_CONFIG_J8 -march=armv8-a+crypto`, no `__ARM_16K_PG__` |
 
-None of that exists yet. The workflow will not produce a bootable J8 kernel
-until at least items 1-2 are implemented. A build of the J8 config is the
-intended first CI run after those changes; it validates compilation only.
+This proves the 4 KiB-granule machine config **compiles and links** against
+xnu-8796.101.5 with the ios-sweet component set. It does **not** prove the
+kernel boots: GICv2 interrupt delivery is absent (`pexpert/arm/pe_fiq.c` has
+only the GICv3 path), and there are no J8 storage, display, touch or USB
+drivers, no 4 KiB shim and no device tree. The build is a compile milestone,
+not a bootable artifact.
+
+The run needed patches 0082-0086 (machine config; Xcode 16 `IORPC.kernelContent`
+backport; iOS user-VA limit for the 4 KiB commpage; staging the ios-sweet
+sources for J8; applying their per-object flags; two link stubs). CI also had
+to leave the retired `macos-14` image: the `macos-15` arm64 pool failed to
+acquire a runner for 15 minutes, so `macos-15-intel` is used. The KDK glob and
+`cancel-in-progress` handling were fixed so a job result means the build, not
+the queue.
+
+Still missing, in dependency order:
+
+1. a shim that builds 4 KiB-granule tables (`shim/mmu.c`, `shim/shim.c` are
+   16 KiB-only);
+2. a GICv2 interrupt driver (distributor/CPU interface, timer PPI 19, SGIs)
+   and the `sleh_irq` dispatch it feeds;
+3. the J8 board devices (SDCC/eMMC, display, touch, keys) as separate patches;
+4. a J8 ADT/device tree for the shim and QEMU harness.
 
 ## 5. Building the iOS root image (not run)
 
