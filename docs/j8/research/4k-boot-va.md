@@ -104,6 +104,35 @@ them to a fixed RAM address and read with QMP) and confirm whether TTBR1 is
 `bootstrap_pagetables + 2 pages`, then check whether the `arm_vm_init` pmap
 switch is where it diverges.
 
+## Attempt 3: non-large-memory layout + no-LSE (reaches VM init)
+
+Patch 0092 moved J8 to the non-large-memory layout (link `0xfffffff007004000`,
+T1SZ 25, no L0 table). The `_arm_init` translation fault disappeared.
+
+The next fault was an undefined instruction in `lck_grp_reference`: clang had
+emitted `ldadd w8, w8, [x1]` (LSE) despite `-march=armv8-a+crypto`, because the
+macOS arm64 target CPU still implies LSE. Patch 0093 builds with
+`-mcpu=cortex-a53+crypto`; the assembler then rejected two `casa` instructions
+in `commpage_asm.s`, replaced for J8 with `ldaxr`/`stxr` loops (patch 0094).
+
+With patch 0094 (CI run **44074310435**), QEMU reaches XNU VM initialization:
+
+```
+Darwin Kernel Version 22.6.0 ... xnu-8796.141.3
+pmap_startup() ...
+vm_page_bootstrap: 76367 free pages, 2417 wired pages, ...
+VM bootstrap: 97 maps, 204 entries and 512 holes available
+panic(cpu 0 caller 0xfffffff007a72ed4): kmem_range_init:
+vm_map_locate_space failing for claim kmem_ptr_range @vm_kern.c:3645
+```
+
+Screenshot: `docs/j8/evidence/qemu-2026-11-17-kmem-range-panic.png`.
+
+So the 4 KiB kernel now executes XNU C code and initializes the VM, but the
+non-large-memory VA layout does not satisfy `kmem_range_init`'s claim. Next:
+analyse that claim against `VM_MIN_KERNEL_ADDRESS`, `LOW_GLOBAL_BASE_ADDRESS`
+and the kernel image span (or fix the large-memory walk).
+
 ## Test
 
 The QEMU harness is ready and does not need the phone:

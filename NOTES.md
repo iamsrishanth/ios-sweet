@@ -42,14 +42,13 @@ State at end of session:
   v0 boot image byte-identically; `j8-compat-check.sh` prints `RESULT PASS` on
   the phone; `j8probe` runs and reports the trap; the probe image builds and its
   readback verifies.
-- XNU J8 build (2026-11-17 06:19/06:54 UTC): CI runs **44028918918** and
-  **44033283321** succeeded on `macos-15-intel` (Xcode 16, KDK 13.5 22G74) with
-  `machine_config=J8`. Current `kernel.development.j8` is 16,529,184 bytes,
-  SHA-256 `f73a0b19dfb90837909fd67b243642c48116f5323ae91e4c3b6489696aa06e0b`,
-  plain arm64 (not arm64e). It proves the 4 KiB-granule config and the GICv2
-  timer/SGI path compile and link. The first QEMU attempt entered the kernel but
-  faulted before serial (see the next bullet); no hardware boot yet. The 4 KiB
-  shim, an ADT and all device drivers are still missing.
+- XNU J8 build (2026-11-17): CI runs **44028918918**/**44033283321** (first
+  links), **44040806897** (L0) and **44074310435** (non-large memory + no LSE)
+  succeeded on `macos-15-intel` (Xcode 16, KDK 13.5). Current
+  `kernel.development.j8` is 16,821,648 bytes, SHA-256
+  `0d40a6b0bd180ea7fea9057286dd162b36f47b055bb9584f2b4c65e2060c8a8a`, plain
+  arm64. It boots into XNU VM init under QEMU (see below); no hardware boot.
+  The 4 KiB shim, an ADT and all device drivers are still missing.
 - GICv2 (patch 0087): `pe_fiq.c` maps `/arm-io/gic`, initializes the distributor
   for non-secure Group 1, enables level-sensitive PPI 19 and SGI 1, and
   initializes GICC per core; `sleh_irq` acknowledges via GICC_IAR, dispatches
@@ -57,23 +56,17 @@ State at end of session:
   SGIR instead of the Apple-only `PE_cpu_signal`. Assumptions still unverified:
   PPI 19 numbering and the non-secure GICC Group 1 bit. PSCI CPU_ON remains
   SWEET-only, so only the boot CPU has interrupts.
-- QEMU J8 harness (2026-11-17 12:46 UTC): `mkadt.py --gicv2` +
-  `qemu-sweet.py --gic-version 2` load the payload and enter the kernel, which
-  then prefetch-aborts at `0xfffffe0007412200` before serial. Root cause: with
-  4 KiB tables `T1SZ_BOOT=25` (39-bit TTBR1), but `PLATFORM=MacOSX` selects
-  `ARM_LARGE_MEMORY` (kernel base -2 TiB, link `0xfffffe0007004000`, 41 bits);
-  the 16K path uses `T1SZ_BOOT=17` and maps it. Fix next: L0 bootstrap level
-  with `T1SZ_BOOT=23`, or a non-large-memory layout. Details and options in
-  `docs/j8/research/4k-boot-va.md`. Patch 0088 (timer INTID from the ADT) was
-  dispatched as CI run 44038887998; its result is not yet recorded.
-- L0 attempt (patch 0089, CI run **44040806897**, build success): `T1SZ_BOOT=23`
-  plus an L0 KVA table. QEMU still faults, now at `_arm_init`
-  (`0xfffffe0007a464cc`, translation fault level 0). QMP `pmemsave` shows the
-  bootstrap `L0[0x1fc]=0xb1173003`, `L1[0]=0xb1178003`, `L1[1]=0xb1179003`,
-  `L2[0x3d]=0xb1a00601`, and the compiled TCR is `0x22a5172519` (T1SZ 23), so
-  the tables and TCR are correct; the fault must use a different TTBR1/TCR
-  state or happen after the `arm_vm_init` switch. Next: store TTBR1/TCR to RAM
-  just before enabling the MMU and read them back with QMP.
+- QEMU J8 (2026-11-17): the working direction is the **non-large-memory layout**
+  (patch 0092: link `0xfffffff007004000`, T1SZ 25) with
+  `-mcpu=cortex-a53+crypto` (0093: clang otherwise emitted LSE `ldadd`, which
+  the A53 cannot execute) and ARMv8.0 LL/SC replacements for the two `casa`
+  instructions in `commpage_asm.s` (0094). QEMU now runs XNU 22.6.0 into VM
+  init: `pmap_startup`, 76,367 free pages, 97 VM maps, then
+  `panic(cpu 0 caller 0xfffffff007a72ed4): kmem_range_init:
+  vm_map_locate_space failing for claim kmem_ptr_range @vm_kern.c:3645`.
+  Screenshot: `docs/j8/evidence/qemu-2026-11-17-kmem-range-panic.png`. The
+  large-memory L0 path (0089/0091) faulted at `_arm_init` despite correct
+  TCR/TTBR1/L0 entries and is not the current direction.
 - CI infrastructure: `macos-14` was retired on 2026-11-02; the `macos-15` arm64
   pool failed to acquire a runner for 15 minutes, so the workflow uses
   `macos-15-intel`. Xcode 16's `iig` needed the `IORPC.kernelContent` backport
@@ -83,8 +76,8 @@ State at end of session:
   sha256 `ee766f98ea5682f0602c23aa3f3e1ce770551f904a437a9a2bb1d61b8d3c9a82`.
 
 Next actions, in order: (1) **do not re-flash the probe as built** (the
-bootloader rejected it); (2) fix the 4 KiB bootstrap VA mapping (L0 level +
-`T1SZ_BOOT=23`, or non-large-memory layout) and re-run the QEMU harness until
+bootloader rejected it); (2) fix the `kmem_ptr_range` claim in `kmem_range_init`
+(`vm_kern.c:3645`) against the non-large-memory VA layout and re-run QEMU until
 serial output and timer ticks appear; (3) add PSCI CPU_ON for the secondary
 cores (still SWEET-only); (4) port the shim's own MMU to 4 KiB and add GICv2,
 SDCC/eMMC loading, display and the J8 ADT; (5) SDCC/eMMC driver; (6) display,
