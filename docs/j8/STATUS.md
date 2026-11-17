@@ -120,12 +120,19 @@ device Apple recognises, and is out of scope for this port.
    5.1). Either build a bootloader-acceptable image (DTB + ramdisk, and a staged
    Odin rollback) or accept the TRM as the answer for `TGran16` and spend the
    effort on the kernel instead.
-2. **Add a J8 machine config to XNU** (4K-granule variant, GICv2 bases, 8 CPUs,
-   2 clusters, timer PPI 19) and compile it in CI; boot it in QEMU `virt` with
-   4 KiB page tables and a 16 KiB advertised page size.
-3. **Port the shim to 4 KiB granule** and print the first EL1 output.
-4. **Write the SDCC/eMMC driver** and get a persistent log + HFS+ root.
-5. Display/touch/keys, then GPU, then Wi-Fi, then the rest.
+2. **Done: J8 machine config and GICv2 path** — patches 0082-0087 compile and
+   link (CI 44033283321). The GICv2 timer/SGI dispatch is compile-verified only;
+   PPI 19 and the non-secure Group 1 view still need a runtime check.
+3. **Build a QEMU J8 harness**: an ADT with a GICv2 node at QEMU `virt`
+   addresses and a timer-INTID property (QEMU `virt` uses 27, the J8 uses 19),
+   plus a minimal boot stub that enters the kernel with the MMU off. This is the
+   first executable test of the 4 KiB page tables and of GICv2 delivery, with no
+   phone risk.
+4. **Port the shim's own MMU to 4 KiB** (`mmu.c`; the kernel is entered with the
+   MMU off, so this is the shim's identity map only), then add the J8 shim
+   pieces: GICv2, SDCC/eMMC kernel loading, display and the J8 ADT.
+5. **Write the SDCC/eMMC driver** and get a persistent log + HFS+ root.
+6. Display/touch/keys, then GPU, then Wi-Fi, then the rest.
 
-Every one of those steps has a gate recorded in `FEASIBILITY.md` section 5 and a
-test in section 7 of the same document. None is started.
+Every step has a gate in `FEASIBILITY.md` section 5 and a test in section 7 of
+that document. Step 2 is done as a build milestone; nothing has booted.
