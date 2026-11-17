@@ -1,0 +1,113 @@
+diff --git a/osfmk/arm64/sleh.c b/osfmk/arm64/sleh.c
+index 9e98264..d0a762c 100644
+--- a/osfmk/arm64/sleh.c
++++ b/osfmk/arm64/sleh.c
+@@ -1896,6 +1896,7 @@ sleh_irq(arm_saved_state_t *state)
+ 	 */
+ 	extern uint32_t pe_gicv2_ack(void);
+ 	extern void pe_gicv2_eoi(uint32_t iar);
++	extern uint32_t pe_gicv2_vtimer_intid(void);
+ 
+ 	uint32_t iar = pe_gicv2_ack();
+ 	uint32_t intid = iar & 0x3FFu;
+@@ -1903,7 +1904,7 @@ sleh_irq(arm_saved_state_t *state)
+ 	if (intid >= 1020) {
+ 		return; /* spurious */
+ 	}
+-	if (intid == J8_VTIMER_INTID) {
++	if (intid == pe_gicv2_vtimer_intid()) {
+ 		sleh_interrupt_handler_prologue(state, DBG_INTR_TYPE_TIMER);
+ 		cdp->cpu_decrementer = -1; /* Large */
+ 		INTERRUPT_MASKED_DEBUG_START(rtclock_intr, DBG_INTR_TYPE_TIMER);
+diff --git a/pexpert/arm/pe_fiq.c b/pexpert/arm/pe_fiq.c
+index 5d2b242..60c8cec 100644
+--- a/pexpert/arm/pe_fiq.c
++++ b/pexpert/arm/pe_fiq.c
+@@ -233,6 +233,8 @@ pe_init_fiq()
+  */
+ static vm_offset_t j8_gicd_base;
+ static vm_offset_t j8_gicc_base;
++/* Qualcomm VTIMER PPI, overridable by /arm-io/gic:virtual-timer-intid. */
++static uint32_t j8_vtimer_intid = J8_VTIMER_INTID;
+ 
+ static inline uint32_t
+ j8_gic_read(vm_offset_t base, uint32_t offset)
+@@ -267,6 +269,12 @@ pe_gicv2_send_ipi(uint32_t target_cpu, uint32_t sgi)
+ 	    ((1u << (target_cpu & 7u)) << 16) | (sgi & 0xfu));
+ }
+ 
++uint32_t
++pe_gicv2_vtimer_intid(void)
++{
++	return j8_vtimer_intid;
++}
++
+ static void
+ j8_gicv2_map(void)
+ {
+@@ -284,13 +292,29 @@ j8_gicv2_map(void)
+ 	 * same /arm-io/gic node as the GICv3 path. Fall back to the measured
+ 	 * J8 bases so a minimal ADT can still bring the timer up.
+ 	 */
+-	if (SecureDTLookupEntry(NULL, "/arm-io/gic", &entry) == kSuccess &&
+-	    SecureDTGetProperty(entry, "reg", &prop, &prop_size) == kSuccess &&
+-	    prop_size >= 4 * sizeof(uint64_t)) {
+-		gicd = ((uint64_t const *)prop)[0];
+-		gicd_size = ((uint64_t const *)prop)[1];
+-		gicc = ((uint64_t const *)prop)[2];
+-		gicc_size = ((uint64_t const *)prop)[3];
++	if (SecureDTLookupEntry(NULL, "/arm-io/gic", &entry) == kSuccess) {
++		if (SecureDTGetProperty(entry, "reg", &prop, &prop_size) == kSuccess &&
++		    prop_size >= 4 * sizeof(uint64_t)) {
++			gicd = ((uint64_t const *)prop)[0];
++			gicd_size = ((uint64_t const *)prop)[1];
++			gicc = ((uint64_t const *)prop)[2];
++			gicc_size = ((uint64_t const *)prop)[3];
++		}
++
++		/*
++		 * QEMU virt wires the virtual timer to PPI 27; the phone uses
++		 * Qualcomm's PPI 19. The ADT states which one.
++		 */
++		void const *timer_prop;
++		unsigned int timer_size;
++		if (SecureDTGetProperty(entry, "virtual-timer-intid",
++		    &timer_prop, &timer_size) == kSuccess &&
++		    timer_size == sizeof(uint32_t)) {
++			uint32_t intid = *(const uint32_t *)timer_prop;
++			if (intid >= 16 && intid < 32) {
++				j8_vtimer_intid = intid;
++			}
++		}
+ 	}
+ 
+ 	j8_gicd_base = ml_io_map(soc_base + gicd, gicd_size);
+@@ -315,15 +339,16 @@ pe_init_fiq(void)
+ 			j8_gic_write(j8_gicd_base, GICD_IPRIORITYR + i, 0xA0A0A0A0u);
+ 		}
+ 		/*
+-		 * Virtual timer PPI 19 is level-sensitive. GICD_ICFGR1 covers
++		 * Virtual timer PPI is level-sensitive. GICD_ICFGR1 covers
+ 		 * PPIs 16..31, two bits per interrupt; bit[2n+1] = level.
+ 		 */
+ 		uint32_t icfgr = j8_gic_read(j8_gicd_base, GICD_ICFGR + 4);
+-		icfgr |= (1u << (((J8_VTIMER_INTID - 16) * 2) + 1));
++		icfgr |= (1u << (((j8_vtimer_intid - 16) * 2) + 1));
+ 		j8_gic_write(j8_gicd_base, GICD_ICFGR + 4, icfgr);
+ 		j8_gic_write(j8_gicd_base, GICD_ISENABLER,
+-		    (1u << J8_VTIMER_INTID) | (1u << J8_IPI_SGI));
++		    (1u << j8_vtimer_intid) | (1u << J8_IPI_SGI));
+ 		j8_gic_write(j8_gicd_base, GICD_CTLR, GICD_CTLR_ENABLEGRP1);
++		kprintf("J8 GICv2: virtual timer INTID %u\n", j8_vtimer_intid);
+ 	}
+ 
+ 	/* CPU interface: banked per core, initialized on every CPU. */
+@@ -332,7 +357,7 @@ pe_init_fiq(void)
+ 	j8_gic_write(j8_gicc_base, GICC_CTLR, GICC_CTLR_ENABLEGRP1);
+ 	/* Banked PPI/SGI enables for this core; harmless to repeat. */
+ 	j8_gic_write(j8_gicd_base, GICD_ISENABLER,
+-	    (1u << J8_VTIMER_INTID) | (1u << J8_IPI_SGI));
++	    (1u << j8_vtimer_intid) | (1u << J8_IPI_SGI));
+ }
+ #else
+ void

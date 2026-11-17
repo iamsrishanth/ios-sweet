@@ -35,8 +35,10 @@ FB_W, FB_H, FB_STRIDE = 1080, 2400, 1080 * 4
 UFS, UFS_SIZE = 0x01d84000, 0x3000
 TIMEBASE = 19200000
 VTIMER_INTID = 19
-# QEMU virt (-M virt,gic-version=3 -cpu cortex-a76): GICD/GICR and the generic timer's CNTFRQ
+# QEMU virt GICv3 (-M virt,gic-version=3 -cpu cortex-a76) and GICv2
+# (-M virt,gic-version=2 -cpu cortex-a53): GICD/GICR or GICD/GICC, and CNTFRQ.
 QEMU_GICD, QEMU_GICR, QEMU_TIMEBASE = 0x08000000, 0x080a0000, 62500000
+QEMU_GICC, QEMU_GICC_SIZE = 0x08010000, 0x10000
 QEMU_VTIMER_INTID = 27
 
 BOOT_MANIFEST_HASH = hashlib.sha384(b'sweet boot manifest').digest()
@@ -74,13 +76,25 @@ def node(name, props=(), children=()):
     return n
 
 
-def build(seed=None, qemu=False, highmem=False):
-    """qemu=True: same tree, but with QEMU virt's GIC addresses and CNTFRQ (tools/qemu-sweet.py)."""
+def build(seed=None, qemu=False, highmem=False, gicv2=False):
+    """qemu=True: QEMU virt's GIC addresses and CNTFRQ (tools/qemu-sweet.py).
+
+    gicv2=True (implies QEMU): emit the GICv2 distributor/CPU-interface node
+    the J8 driver expects instead of the GICv3 distributor/redistributor one.
+    """
     phys_base, mem_size = (HIGH_PHYS_BASE, HIGH_MEM_SIZE) if highmem else (PHYS_BASE, MEM_SIZE)
     # Carve the panic log off the top so the kernel never allocates over it.
     panic_base = phys_base + mem_size - PANIC_LOG_SIZE
     mem_size -= PANIC_LOG_SIZE
-    gicd, gicr, timebase = (QEMU_GICD, QEMU_GICR, QEMU_TIMEBASE) if qemu else (GICD, GICR, TIMEBASE)
+    if qemu:
+        gicd = QEMU_GICD
+        timebase = QEMU_TIMEBASE
+        if gicv2:
+            gic_cpu, gic_cpu_size = QEMU_GICC, QEMU_GICC_SIZE
+        else:
+            gic_cpu, gic_cpu_size = QEMU_GICR, GICR_SIZE
+    else:
+        gicd, gic_cpu, gic_cpu_size, timebase = GICD, GICR, GICR_SIZE, TIMEBASE
     seed = seed if seed is not None else os.urandom(64)
     phandle = iter(range(1, 1000))
     ph = lambda: ('AAPL,phandle', u32(next(phandle)))
@@ -160,10 +174,10 @@ def build(seed=None, qemu=False, highmem=False):
 
     gic = node('gic', [
         ph(),
-        ('compatible', cstr('arm,gic-v3')),
+        ('compatible', cstr('arm,gic-2') if gicv2 else cstr('arm,gic-v3')),
         ('interrupt-controller', b''),
         ('virtual-timer-intid', u32(QEMU_VTIMER_INTID if qemu else VTIMER_INTID)),
-        ('reg', u64(gicd - SOC_BASE, GICD_SIZE, gicr - SOC_BASE, GICR_SIZE)),
+        ('reg', u64(gicd - SOC_BASE, GICD_SIZE, gic_cpu - SOC_BASE, gic_cpu_size)),
     ])
     arm_io = node('arm-io', [
         ph(),
@@ -242,7 +256,9 @@ def build(seed=None, qemu=False, highmem=False):
 
 
 if __name__ == '__main__':
-    root = build(qemu='--qemu' in sys.argv, highmem='--highmem' in sys.argv)
+    gicv2 = '--gicv2' in sys.argv
+    root = build(qemu='--qemu' in sys.argv or gicv2,
+                 highmem='--highmem' in sys.argv, gicv2=gicv2)
     blob = adt.serialize(root)
     open(sys.argv[1], 'wb').write(blob)
     if '--dump' in sys.argv:
