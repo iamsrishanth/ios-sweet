@@ -1,0 +1,22 @@
+diff --git a/osfmk/vm/vm_kern.c b/osfmk/vm/vm_kern.c
+index f33ba14..04d996c 100644
+--- a/osfmk/vm/vm_kern.c
++++ b/osfmk/vm/vm_kern.c
+@@ -3621,7 +3621,17 @@ kmem_scramble_ranges(void)
+ 	 * pointer packing schemes using KERNEL_PMAP_HEAP_RANGE_START as a base
+ 	 * do not admit this address to be part of any zone submap.
+ 	 */
++#if defined(ARM64_BOARD_CONFIG_J8)
++	/*
++	 * J8: the non-large-memory kernel_map is only ~112 GiB and the fuzzed
++	 * cursor left the 8 GiB zones claim without a contiguous hole while
++	 * the map's 64 GiB lower hole stayed unused. Start at the map base so
++	 * the claims pack into the lower hole.
++	 */
++	start = kernel_map->min_offset;
++#else
+ 	start = kmem_fuzz_start();
++#endif
+ 
+ 	/*
+ 	 * Add claims for ptr and data kmem_ranges
