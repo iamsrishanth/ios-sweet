@@ -1,0 +1,34 @@
+diff --git a/osfmk/vm/vm_kern.c b/osfmk/vm/vm_kern.c
+index 54edb01..f33ba14 100644
+--- a/osfmk/vm/vm_kern.c
++++ b/osfmk/vm/vm_kern.c
+@@ -102,6 +102,7 @@
+ SECURITY_READ_ONLY_LATE(vm_map_t) kernel_map;
+ SECURITY_READ_ONLY_LATE(struct mach_vm_range) kmem_ranges[KMEM_RANGE_COUNT];
+ SECURITY_READ_ONLY_LATE(struct mach_vm_range) kmem_large_ranges[KMEM_RANGE_COUNT];
++static vm_map_size_t kmem_dbg_largest_free;
+ 
+ static TUNABLE(uint32_t, kmem_ptr_ranges, "kmem_ptr_ranges",
+     KMEM_RANGE_ID_NUM_PTR);
+@@ -3526,6 +3527,7 @@ kmem_add_extra_claims(void)
+ 	vm_map_size_t largest_free_size = 0, total_claims = 0;
+ 
+ 	vm_map_sizes(kernel_map, NULL, NULL, &largest_free_size);
++	kmem_dbg_largest_free = largest_free_size;
+ 	largest_free_size = trunc_page(largest_free_size);
+ 
+ 	/*
+@@ -3641,8 +3643,11 @@ kmem_scramble_ranges(void)
+ 		struct mach_vm_range *sp_range = sp.kc_range;
+ 		if (vm_map_locate_space(kernel_map, sp.kc_size, 0,
+ 		    VM_MAP_KERNEL_FLAGS_ANYWHERE(), &start, NULL) != KERN_SUCCESS) {
+-			panic("kmem_range_init: vm_map_locate_space failing for claim %s",
+-			    sp.kc_name);
++			panic("kmem_range_init: locate failed for %s size=0x%llx start=0x%llx "
++			    "min=0x%llx max=0x%llx largest=0x%llx ptrs=%u",
++			    sp.kc_name, (uint64_t)sp.kc_size, (uint64_t)start,
++			    (uint64_t)kernel_map->min_offset, (uint64_t)kernel_map->max_offset,
++			    (uint64_t)kmem_dbg_largest_free, kmem_ptr_ranges);
+ 		}
+ 
+ 		end = start + sp.kc_size;
