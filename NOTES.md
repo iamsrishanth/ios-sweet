@@ -66,6 +66,14 @@ State at end of session:
   with `T1SZ_BOOT=23`, or a non-large-memory layout. Details and options in
   `docs/j8/research/4k-boot-va.md`. Patch 0088 (timer INTID from the ADT) was
   dispatched as CI run 44038887998; its result is not yet recorded.
+- L0 attempt (patch 0089, CI run **44040806897**, build success): `T1SZ_BOOT=23`
+  plus an L0 KVA table. QEMU still faults, now at `_arm_init`
+  (`0xfffffe0007a464cc`, translation fault level 0). QMP `pmemsave` shows the
+  bootstrap `L0[0x1fc]=0xb1173003`, `L1[0]=0xb1178003`, `L1[1]=0xb1179003`,
+  `L2[0x3d]=0xb1a00601`, and the compiled TCR is `0x22a5172519` (T1SZ 23), so
+  the tables and TCR are correct; the fault must use a different TTBR1/TCR
+  state or happen after the `arm_vm_init` switch. Next: store TTBR1/TCR to RAM
+  just before enabling the MMU and read them back with QMP.
 - CI infrastructure: `macos-14` was retired on 2026-11-02; the `macos-15` arm64
   pool failed to acquire a runner for 15 minutes, so the workflow uses
   `macos-15-intel`. Xcode 16's `iig` needed the `IORPC.kernelContent` backport

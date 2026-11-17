@@ -28,7 +28,7 @@ evidence.
 | Partition map / storage type (eMMC, not UFS) | **hardware-verified** | live `/proc/partitions`, `/dev/block/by-name`, device tree |
 | Recovery path and rollback assets | **hardware-verified** *(historical Android use)* + documented | `INSTALL-RECOVERY.md` |
 | Page-size capability (`TGran16`) | **documented: no 16K** (unit confirmation failed) | Cortex-A53 r0p4 TRM `TGran16 = 0x0`; EL0 access is architecturally absent (SIGILL measured); the EL1 probe image was built and flashed but the **bootloader rejected it**, so no on-unit read exists |
-| XNU kernel built for J8 | **build-verified, not bootable** | CI runs 44028918918 (first link) and 44033283321 (with GICv2): `kernel.development.j8`, 16.53 MB, SHA-256 `f73a0b19dfb90837909fd67b243642c48116f5323ae91e4c3b6489696aa06e0b`, plain ARM64 Mach-O; patches 0082-0087 |
+| XNU kernel built for J8 | **build-verified, not bootable** | CI runs 44028918918 (first link), 44033283321 (GICv2), 44040806897 (L0 bootstrap): `kernel.development.j8`, 16,529,256 bytes, SHA-256 `74b1fec6796c453de3d89e1e59d2ae25e35a2ea996756b7b870f0b5d8b1e4830`, plain ARM64 Mach-O; patches 0082-0089 |
 | J8 shim (4 KiB granule MMU) | **researched** | `shim/mmu.c` is 16 KiB-only |
 | Anything booting on the J8 from this project | **none** | nothing flashed |
 
@@ -75,6 +75,7 @@ evidence.
 | 2026-11-17 05:43-06:19 UTC | J8 kernel build in GitHub CI (runs 43955617494 -> 43964523225 -> 44026100030 -> **44028918918**) | **success**: `kernel.development.j8` compiled and linked; earlier runs exposed the 4 KiB pmap assertion, HFS staging, component flags and two link stubs, all fixed | `BUILD.md` section 4 |
 | 2026-11-17 06:54 UTC | J8 kernel with GICv2 interrupt path (run **44033283321**) | **success**: links; GICv2 driver, timer PPI 19 dispatch and SGI IPIs are compile-verified only | `BUILD.md` section 4, patch 0087 |
 | 2026-11-17 12:46 UTC | QEMU J8 boot (GICv2 machine, timer INTID 27, `cortex-a53`) | payload enters the kernel, then a **prefetch-abort loop at `0xfffffe0007412200`** before serial; 4 KiB bootstrap `T1SZ=25` cannot map the -2 TiB macOS-platform link address | `research/4k-boot-va.md` |
+| 2026-11-17 07:56 UTC | J8 L0 bootstrap build (run **44040806897**) | **build success**; QEMU still faults at `_arm_init` with translation fault level 0, although the live L0/L1/L2 entries for that address are valid; TCR has T1SZ 23 | `research/4k-boot-va.md` |
 | - | Any J8 boot of XNU/iOS | not attempted: no GICv2 delivery, shim, device tree or drivers | - |
 
 ## 5. What this task implemented
@@ -124,12 +125,12 @@ device Apple recognises, and is out of scope for this port.
 2. **Done: J8 machine config and GICv2 path** — patches 0082-0087 compile and
    link (CI 44033283321). The GICv2 timer/SGI dispatch is compile-verified only;
    PPI 19 and the non-secure Group 1 view still need a runtime check.
-3. **QEMU J8 harness: built and first boot attempted.** `mkadt.py --gicv2` and
-   `qemu-sweet.py --gic-version 2` boot the payload, but the kernel faults on
-   its high mapping: 4 KiB `T1SZ_BOOT = 25` (39-bit) cannot cover the -2 TiB
-   macOS-platform link address. Next fix: add the L0 bootstrap level with
-   `T1SZ_BOOT = 23` (or choose a non-large-memory layout), then re-run QEMU and
-   look for serial output and timer ticks. Evidence: `research/4k-boot-va.md`.
+3. **QEMU J8 harness: built; bootstrap VA still blocked.** The L0 bootstrap and
+   `T1SZ_BOOT=23` are in (patch 0089), and the live L0/L1/L2 entries map
+   `_arm_init`, but the fetch still faults at level 0 with a TCR that has
+   T1SZ 23. Next: record TTBR1/TCR immediately before the MMU enable (store to
+   RAM, read with QMP) and identify the state that differs, or the later
+   `arm_vm_init` switch. Evidence: `research/4k-boot-va.md`.
 4. **Port the shim's own MMU to 4 KiB** (`mmu.c`; the kernel is entered with the
    MMU off, so this is the shim's identity map only), then add the J8 shim
    pieces: GICv2, SDCC/eMMC kernel loading, display and the J8 ADT.

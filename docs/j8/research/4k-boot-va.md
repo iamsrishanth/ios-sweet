@@ -77,6 +77,33 @@ change: it builds the runtime kernel tables, and its `T1SZ` must match the
 bootstrap's 23. The static assertion in `pmap.c` around the commpage already
 runs under this layout and passes with the iOS VM limit (patch 0084).
 
+## Attempt 2: L0 bootstrap (patch 0089)
+
+`T1SZ_BOOT` is now 23 for J8 and `start.s` builds an L0 table for the KVA
+mapping; CI run **44040806897** built it successfully. QEMU still faults, now
+at `_arm_init` (`0xfffffe0007a464cc`), ESR `0x86000004` (translation fault,
+level 0).
+
+The bootstrap tables themselves are valid. Read from guest physical memory with
+QMP `pmemsave` while stopped at the fault:
+
+| Entry | Value |
+|---|---|
+| `L0[0x1fc]` (index for `-2 TiB`) | `0xb1173003` |
+| `L1[0]` | `0xb1178003` |
+| `L1[1]` | `0xb1179003` |
+| `L2[0x3d]` (covers `0x7a464cc`) | `0xb1a00601` |
+
+The compiled `sysreg_restore.tcr_el1` is `0x22a5172519`: T0SZ 25, T1SZ 23, both
+4 KiB granules. So the tables and the TCR value are what patch 0089 intends.
+
+The remaining fault therefore happens with a TTBR1/TCR state that does not
+match those tables, or after a later switch. `_arm_init` is the first C entry,
+so the next step is to record TTBR1/TCR immediately before the MMU enable (store
+them to a fixed RAM address and read with QMP) and confirm whether TTBR1 is
+`bootstrap_pagetables + 2 pages`, then check whether the `arm_vm_init` pmap
+switch is where it diverges.
+
 ## Test
 
 The QEMU harness is ready and does not need the phone:
