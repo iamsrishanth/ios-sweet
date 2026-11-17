@@ -1,24 +1,21 @@
 diff --git a/osfmk/arm64/proc_reg.h b/osfmk/arm64/proc_reg.h
-index e404046..cbe1b6d 100644
+index e404046..4f13fe6 100644
 --- a/osfmk/arm64/proc_reg.h
 +++ b/osfmk/arm64/proc_reg.h
-@@ -1,4 +1,4 @@
--/*
-+﻿/*
-  * Copyright (c) 2007-2022 Apple Inc. All rights reserved.
-  *
-  * @APPLE_OSREFERENCE_LICENSE_HEADER_START@
-@@ -982,7 +982,7 @@
-  * A 39-bit TTBR1 (T1SZ 25) does not cover it, so use 41 bits and the L0
-  * bootstrap table built in start.s.
+@@ -978,11 +978,12 @@
+ #else /* __ARM_16K_PG__ */
+ #if defined(ARM64_BOARD_CONFIG_J8)
+ /*
+- * J8: the macOS-platform kernel is linked at -2 TiB (41 significant bits).
+- * A 39-bit TTBR1 (T1SZ 25) does not cover it, so use 41 bits and the L0
+- * bootstrap table built in start.s.
++ * J8: the macOS-platform kernel is linked at -2 TiB. A 39-bit TTBR1
++ * (T1SZ 25) does not cover it; the 16 KiB SWEET path uses 47 bits with the
++ * same link address. Use 17 (47-bit) with the L0 bootstrap table; the L0/L1
++ * indices are the same as for the exact 41-bit size.
   */
 -#define T1SZ_BOOT 23ULL
 +#define T1SZ_BOOT 17ULL
  #elif __ARM64_PMAP_SUBPAGE_L1__
  #define T1SZ_BOOT 26ULL
  #else /* !__ARM64_PMAP_SUBPAGE_L1__ */
-@@ -2672,3 +2672,4 @@ nop
- 
- 
- #endif /* _ARM64_PROC_REG_H_ */
-+
