@@ -77,6 +77,8 @@ evidence.
 | 2026-11-17 07:16 UTC | QEMU J8 boot (GICv2 machine, timer INTID 27, `cortex-a53`) | payload enters the kernel, then a **prefetch-abort loop at `0xfffffe0007412200`** before serial; 4 KiB bootstrap `T1SZ=25` cannot map the -2 TiB macOS-platform link address | `research/4k-boot-va.md` |
 | 2026-11-17 07:56 UTC | J8 L0 bootstrap build (run **44040806897**) | **build success**; QEMU still faults at `_arm_init` with translation fault level 0, although the live L0/L1/L2 entries for that address are valid; TCR has T1SZ 23 | `research/4k-boot-va.md` |
 | 2026-11-17 11:49 UTC | QEMU J8 boot, non-large layout + no-LSE build (run **44074310435**) | **boots into XNU VM init**: `pmap_startup`, 76,367 free pages, 97 VM maps; then panics at `kmem_range_init: vm_map_locate_space failing for claim kmem_ptr_range @vm_kern.c:3645` | `evidence/qemu-2026-11-17-kmem-range-panic.png` |
+| 2026-11-17 14:52 UTC | Diagnostic panic with claim sizes (run **44098877305**) | `zones` 8 GiB failed at `start=0xfffffff0840e0000`; largest hole 26 GiB; claims were packed forward from a fuzzed cursor | `evidence/qemu-2026-11-17-kmem-zones-debug.png` |
+| 2026-11-17 20:08 UTC | J8 **RELEASE** build, no KASAN (run **44162509756**) | boots to VM init; same failure: `zones` 8 GiB at `start=0xfffffff597a18000`, map 112 GiB, largest hole 45.9 GiB. KASAN is not the cause | `evidence/qemu-2026-11-17-kmem-zones-release.png` |
 | - | Any J8 boot of XNU/iOS | not attempted: no GICv2 delivery, shim, device tree or drivers | - |
 
 ## 5. What this task implemented

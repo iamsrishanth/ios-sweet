@@ -56,17 +56,22 @@ State at end of session:
   SGIR instead of the Apple-only `PE_cpu_signal`. Assumptions still unverified:
   PPI 19 numbering and the non-secure GICC Group 1 bit. PSCI CPU_ON remains
   SWEET-only, so only the boot CPU has interrupts.
-- QEMU J8 (2026-11-17): the working direction is the **non-large-memory layout**
-  (patch 0092: link `0xfffffff007004000`, T1SZ 25) with
-  `-mcpu=cortex-a53+crypto` (0093: clang otherwise emitted LSE `ldadd`, which
-  the A53 cannot execute) and ARMv8.0 LL/SC replacements for the two `casa`
-  instructions in `commpage_asm.s` (0094). QEMU now runs XNU 22.6.0 into VM
-  init: `pmap_startup`, 76,367 free pages, 97 VM maps, then
-  `panic(cpu 0 caller 0xfffffff007a72ed4): kmem_range_init:
-  vm_map_locate_space failing for claim kmem_ptr_range @vm_kern.c:3645`.
-  Screenshot: `docs/j8/evidence/qemu-2026-11-17-kmem-range-panic.png`. The
-  large-memory L0 path (0089/0091) faulted at `_arm_init` despite correct
-  TCR/TTBR1/L0 entries and is not the current direction.
+- QEMU J8 (2026-11-17/18): the working direction is the **non-large-memory
+  layout** (0092: link `0xfffffff007004000`, T1SZ 25) with
+  `-mcpu=cortex-a53+crypto` (0093: clang had emitted LSE `ldadd`, which the A53
+  cannot execute) and ARMv8.0 LL/SC for the two `casa` instructions in
+  `commpage_asm.s` (0094). QEMU runs XNU 22.6.0 into VM init: `pmap_startup`,
+  76,367 free pages, 97 VM maps, then `kmem_range_init` fails. Diagnostics
+  (0095) show the shuffled claims packed forward from a fuzzed cursor; 0096
+  starts at the map base, but DEVELOPMENT then underflowed `kmem_data_range`.
+  A RELEASE build without KASAN (run **44162509756**) fails the same way:
+  `zones` 8 GiB at `start=0xfffffff597a18000`, map 112 GiB, largest hole
+  45.9 GiB. KASAN is not the cause; the 4K non-large map is too tight for the
+  claim scheme. Screenshots:
+  `docs/j8/evidence/qemu-2026-11-17-kmem-zones-debug.png` and
+  `...-kmem-zones-release.png`. The large-memory L0 path (0089/0091) faulted at
+  `_arm_init` despite correct TCR/TTBR1/L0 entries and is not the current
+  direction.
 - CI infrastructure: `macos-14` was retired on 2026-11-02; the `macos-15` arm64
   pool failed to acquire a runner for 15 minutes, so the workflow uses
   `macos-15-intel`. Xcode 16's `iig` needed the `IORPC.kernelContent` backport
@@ -76,13 +81,14 @@ State at end of session:
   sha256 `ee766f98ea5682f0602c23aa3f3e1ce770551f904a437a9a2bb1d61b8d3c9a82`.
 
 Next actions, in order: (1) **do not re-flash the probe as built** (the
-bootloader rejected it); (2) fix the `kmem_ptr_range` claim in `kmem_range_init`
-(`vm_kern.c:3645`) against the non-large-memory VA layout and re-run QEMU until
-serial output and timer ticks appear; (3) add PSCI CPU_ON for the secondary
-cores (still SWEET-only); (4) port the shim's own MMU to 4 KiB and add GICv2,
-SDCC/eMMC loading, display and the J8 ADT; (5) SDCC/eMMC driver; (6) display,
-touch, keys, then GPU, Wi-Fi/BT, modem/audio, App Store. Details and gates in
-`docs/j8/FEASIBILITY.md` section 5 and `docs/j8/STATUS.md` section 7.
+bootloader rejected it); (2) fix claim placement in `kmem_range_init` (start at
+the largest free hole, or enlarge/split the non-large map) and re-run QEMU
+until serial output and timer ticks appear; (3) add PSCI CPU_ON for the
+secondary cores (still SWEET-only); (4) port the shim's own MMU to 4 KiB and
+add GICv2, SDCC/eMMC loading, display and the J8 ADT; (5) SDCC/eMMC driver;
+(6) display, touch, keys, then GPU, Wi-Fi/BT, modem/audio, App Store. Details
+and gates in `docs/j8/FEASIBILITY.md` section 5 and `docs/j8/STATUS.md`
+section 7.
 
 ## Agent handoff / active work (2026-10-15, latest)
 

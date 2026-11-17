@@ -129,9 +129,36 @@ vm_map_locate_space failing for claim kmem_ptr_range @vm_kern.c:3645
 Screenshot: `docs/j8/evidence/qemu-2026-11-17-kmem-range-panic.png`.
 
 So the 4 KiB kernel now executes XNU C code and initializes the VM, but the
-non-large-memory VA layout does not satisfy `kmem_range_init`'s claim. Next:
-analyse that claim against `VM_MIN_KERNEL_ADDRESS`, `LOW_GLOBAL_BASE_ADDRESS`
-and the kernel image span (or fix the large-memory walk).
+non-large-memory VA layout does not satisfy `kmem_range_init`'s claim.
+
+## Attempt 4: kmem claim sizing (current blocker)
+
+Diagnostics (patch 0095) gave:
+
+```
+zones size=0x200000000 (8 GiB) start=0xfffffff0840e0000
+min=0xffffffe000000000 max=0xfffffffbffffffff
+largest=0x681dfc000 (26 GiB) ptrs=1
+```
+
+The claims are packed forward from a fuzzed cursor, so the 8 GiB `zones` claim
+runs out of contiguous space while a larger hole exists below. Patch 0096
+starts the cursor at `kernel_map->min_offset`; the next DEVELOPMENT run then
+underflowed `kmem_data_range` (`size=0xffff7fecb28f8000`), and the 8 GiB
+`zones` claim still failed.
+
+A **RELEASE** build (run **44162509756**, no KASAN) fails the same way:
+`zones` 8 GiB at `start=0xfffffff597a18000`, map 112 GiB, largest hole 45.9 GiB.
+So KASAN is not the cause; the non-large-memory kernel map is too tight for
+xnu-8796's claim scheme. The claims are sized to fill exactly the largest free
+hole, so simply shrinking `zones` does not create headroom; the placement
+(cursor vs. hole start) and the map's fragmentation are the issue.
+
+Next options: start the claim cursor at the largest hole (not at the map base
+or a fuzzed offset), enlarge/split the non-large kernel map, or return to the
+large-memory walk. Screenshots:
+`docs/j8/evidence/qemu-2026-11-17-kmem-zones-debug.png` and
+`...-kmem-zones-release.png`.
 
 ## Test
 
