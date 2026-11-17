@@ -117,6 +117,18 @@ pages) would see 16 KiB, as on an iPhone. If the handset does expose
 instead and the 4 KiB work is unnecessary. The 4 KiB-granule board config is
 therefore a hedge that must be built and tested either way.
 
+**Boot-time gap found on 2026-11-17:** the 4 KiB bootstrap cannot map the
+macOS-platform kernel VA layout. With no `__ARM_16K_PG__`, `T1SZ_BOOT = 25`
+(39-bit TTBR1, base `0xffffff8000000000`), but `PLATFORM=MacOSX` selects
+`ARM_LARGE_MEMORY`: `VM_MIN_KERNEL_ADDRESS = -2 TiB` and the kernel is linked at
+`0xfffffe0007004000` (41 significant bits). The first high-VA fetch therefore
+faults; the first QEMU J8 run shows it as a prefetch-abort loop at
+`0xfffffe0007412200` before any serial output. The 16 KiB SWEET path uses
+`T1SZ_BOOT = 17` (47-bit) and maps the same link address. The fix is an L0
+bootstrap level with `T1SZ_BOOT = 23` (or a non-large-memory platform); see
+`research/4k-boot-va.md`. This is a pre-existing 4K/large-memory gap in
+xnu-8796, not a J8 driver bug.
+
 Relevant source locations:
 
 | File | Lines | What it establishes |

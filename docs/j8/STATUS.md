@@ -74,6 +74,7 @@ evidence.
 | 2026-11-17 ~01:50 | Recovery: Odin 3.13.1 AP tar with the ROM `boot.img` | **PASS**, Android booted; root lost (boot had been Magisk-patched) | `INSTALL-RECOVERY.md` section 5.2 |
 | 2026-11-17 05:43-06:19 UTC | J8 kernel build in GitHub CI (runs 43955617494 -> 43964523225 -> 44026100030 -> **44028918918**) | **success**: `kernel.development.j8` compiled and linked; earlier runs exposed the 4 KiB pmap assertion, HFS staging, component flags and two link stubs, all fixed | `BUILD.md` section 4 |
 | 2026-11-17 06:54 UTC | J8 kernel with GICv2 interrupt path (run **44033283321**) | **success**: links; GICv2 driver, timer PPI 19 dispatch and SGI IPIs are compile-verified only | `BUILD.md` section 4, patch 0087 |
+| 2026-11-17 12:46 UTC | QEMU J8 boot (GICv2 machine, timer INTID 27, `cortex-a53`) | payload enters the kernel, then a **prefetch-abort loop at `0xfffffe0007412200`** before serial; 4 KiB bootstrap `T1SZ=25` cannot map the -2 TiB macOS-platform link address | `research/4k-boot-va.md` |
 | - | Any J8 boot of XNU/iOS | not attempted: no GICv2 delivery, shim, device tree or drivers | - |
 
 ## 5. What this task implemented
@@ -123,11 +124,12 @@ device Apple recognises, and is out of scope for this port.
 2. **Done: J8 machine config and GICv2 path** — patches 0082-0087 compile and
    link (CI 44033283321). The GICv2 timer/SGI dispatch is compile-verified only;
    PPI 19 and the non-secure Group 1 view still need a runtime check.
-3. **Build a QEMU J8 harness**: an ADT with a GICv2 node at QEMU `virt`
-   addresses and a timer-INTID property (QEMU `virt` uses 27, the J8 uses 19),
-   plus a minimal boot stub that enters the kernel with the MMU off. This is the
-   first executable test of the 4 KiB page tables and of GICv2 delivery, with no
-   phone risk.
+3. **QEMU J8 harness: built and first boot attempted.** `mkadt.py --gicv2` and
+   `qemu-sweet.py --gic-version 2` boot the payload, but the kernel faults on
+   its high mapping: 4 KiB `T1SZ_BOOT = 25` (39-bit) cannot cover the -2 TiB
+   macOS-platform link address. Next fix: add the L0 bootstrap level with
+   `T1SZ_BOOT = 23` (or choose a non-large-memory layout), then re-run QEMU and
+   look for serial output and timer ticks. Evidence: `research/4k-boot-va.md`.
 4. **Port the shim's own MMU to 4 KiB** (`mmu.c`; the kernel is entered with the
    MMU off, so this is the shim's identity map only), then add the J8 shim
    pieces: GICv2, SDCC/eMMC kernel loading, display and the J8 ADT.
