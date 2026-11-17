@@ -11,9 +11,10 @@ Redmi device.
 
 State at end of session:
 
-- Repo: `iamsrishanth/ios-sweet`, branch `samsung-j8-bringup`, head `105df05`
-  (XNU patches 0082-0086, docs, research notes, tools and this handoff). CI run
-  **44028918918** built and linked the J8 kernel; the artifact is not committed.
+- Repo: `iamsrishanth/ios-sweet`, branch `samsung-j8-bringup`, head `d28610a`
+  (XNU patches 0082-0087, docs, research notes, tools and this handoff). CI runs
+  **44028918918** (first link) and **44033283321** (GICv2 path) succeeded; the
+  artifacts are not committed.
 - Device: `SM-J810G` / `j8y18lte` / msm8953, bootloader `J810GDDU6CWH2`,
   Android 11 Havoc-OS installed again after recovery, TWRP on `recovery`,
   **dead power button**, **no SIM fitted** (`gsm.sim.state=ABSENT`).
@@ -41,13 +42,20 @@ State at end of session:
   v0 boot image byte-identically; `j8-compat-check.sh` prints `RESULT PASS` on
   the phone; `j8probe` runs and reports the trap; the probe image builds and its
   readback verifies.
-- XNU J8 build (2026-11-17 06:19 UTC): CI run **44028918918** succeeded on
-  `macos-15-intel` (Xcode 16, KDK 13.5 22G74) with `machine_config=J8`.
-  `kernel.development.j8` is 16,545,368 bytes, SHA-256
-  `38adfd548d5c6f1865aa778f3e5d554e86b682a1a1fb37877566bbac12de6dc0`, plain
-  arm64 (not arm64e). It proves the 4 KiB-granule config compiles and links;
-  GICv2 delivery, the 4 KiB shim, an ADT and all device drivers are still
-  missing, so it cannot boot.
+- XNU J8 build (2026-11-17 06:19/06:54 UTC): CI runs **44028918918** and
+  **44033283321** succeeded on `macos-15-intel` (Xcode 16, KDK 13.5 22G74) with
+  `machine_config=J8`. Current `kernel.development.j8` is 16,529,184 bytes,
+  SHA-256 `f73a0b19dfb90837909fd67b243642c48116f5323ae91e4c3b6489696aa06e0b`,
+  plain arm64 (not arm64e). It proves the 4 KiB-granule config and the GICv2
+  timer/SGI path compile and link; neither has run on hardware or QEMU. The
+  4 KiB shim, an ADT and all device drivers are still missing.
+- GICv2 (patch 0087): `pe_fiq.c` maps `/arm-io/gic`, initializes the distributor
+  for non-secure Group 1, enables level-sensitive PPI 19 and SGI 1, and
+  initializes GICC per core; `sleh_irq` acknowledges via GICC_IAR, dispatches
+  timer/IPI/other and completes via GICC_EOIR; `cpu_common.c` sends SGI 1 via
+  SGIR instead of the Apple-only `PE_cpu_signal`. Assumptions still unverified:
+  PPI 19 numbering and the non-secure GICC Group 1 bit. PSCI CPU_ON remains
+  SWEET-only, so only the boot CPU has interrupts.
 - CI infrastructure: `macos-14` was retired on 2026-11-02; the `macos-15` arm64
   pool failed to acquire a runner for 15 minutes, so the workflow uses
   `macos-15-intel`. Xcode 16's `iig` needed the `IORPC.kernelContent` backport
@@ -57,12 +65,12 @@ State at end of session:
   sha256 `ee766f98ea5682f0602c23aa3f3e1ce770551f904a437a9a2bb1d61b8d3c9a82`.
 
 Next actions, in order: (1) **do not re-flash the probe as built** (the
-bootloader rejected it); (2) port the shim to 4 KiB-granule tables and add the
-GICv2 interrupt driver (distributor/CPU interface, timer PPI 19, SGIs) — the
-two boot prerequisites the linked kernel still lacks; (3) write a J8 ADT/device
-tree for the shim and QEMU harness; (4) SDCC/eMMC driver; (5) display, touch,
-keys, then GPU, Wi-Fi/BT, modem/audio, App Store. Details and gates in
-`docs/j8/FEASIBILITY.md` section 5 and `docs/j8/STATUS.md` section 7.
+bootloader rejected it); (2) port the shim to 4 KiB-granule tables and write a
+J8 ADT, then boot the linked kernel under QEMU to exercise the GICv2 timer; (3)
+add PSCI CPU_ON for the secondary cores (still SWEET-only); (4) SDCC/eMMC
+driver; (5) display, touch, keys, then GPU, Wi-Fi/BT, modem/audio, App Store.
+Details and gates in `docs/j8/FEASIBILITY.md` section 5 and
+`docs/j8/STATUS.md` section 7.
 
 ## Agent handoff / active work (2026-10-15, latest)
 

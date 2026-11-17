@@ -75,14 +75,15 @@ gh workflow run xnu.yml -R iamsrishanth/ios-sweet --ref samsung-j8-bringup \
 gh run download <RUN_ID> -R iamsrishanth/ios-sweet -n xnu-kernel -D work/j8-kernel
 ```
 
-Verified run: **44028918918** (2026-11-17 06:19 UTC), commit `105df05`,
-`conclusion=success`. Produced:
+Verified runs: **44028918918** (first successful link, no interrupt support)
+and **44033283321** (with the GICv2 driver, 2026-11-17 06:54 UTC), both
+`conclusion=success`; the current artifact is from the second:
 
 | Field | Value |
 |---|---|
 | File | `kernel.development.j8` |
-| Size | 16,545,368 bytes (15.78 MiB) |
-| SHA-256 | `38adfd548d5c6f1865aa778f3e5d554e86b682a1a1fb37877566bbac12de6dc0` |
+| Size | 16,529,184 bytes (15.76 MiB) |
+| SHA-256 | `f73a0b19dfb90837909fd67b243642c48116f5323ae91e4c3b6489696aa06e0b` |
 | Mach-O | `cputype 0x0100000c` (ARM64), `cpusubtype 0` (plain arm64, **not arm64e**), `MH_EXECUTE` |
 | Toolchain | GitHub `macos-15-intel`, Xcode 16 (MacOSX15.0 SDK), KDK 13.5 build `22G74` installed by the harness |
 | Config | `config/MASTER.arm64.j8`, `-DARM64_BOARD_CONFIG_J8 -march=armv8-a+crypto`, no `__ARM_16K_PG__` |
@@ -94,9 +95,10 @@ only the GICv3 path), and there are no J8 storage, display, touch or USB
 drivers, no 4 KiB shim and no device tree. The build is a compile milestone,
 not a bootable artifact.
 
-The run needed patches 0082-0086 (machine config; Xcode 16 `IORPC.kernelContent`
+The runs needed patches 0082-0087 (machine config; Xcode 16 `IORPC.kernelContent`
 backport; iOS user-VA limit for the 4 KiB commpage; staging the ios-sweet
-sources for J8; applying their per-object flags; two link stubs). CI also had
+sources for J8; applying their per-object flags; two link stubs; and the GICv2
+timer/SGI interrupt path). CI also had
 to leave the retired `macos-14` image: the `macos-15` arm64 pool failed to
 acquire a runner for 15 minutes, so `macos-15-intel` is used. The KDK glob and
 `cancel-in-progress` handling were fixed so a job result means the build, not
