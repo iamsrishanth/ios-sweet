@@ -1,0 +1,266 @@
+diff --git a/osfmk/arm/cpu_common.c b/osfmk/arm/cpu_common.c
+index abf7ec7..eb04323 100644
+--- a/osfmk/arm/cpu_common.c
++++ b/osfmk/arm/cpu_common.c
+@@ -58,6 +58,11 @@
+ #include <arm64/proc_reg.h>
+ #include <libkern/OSAtomic.h>
+ 
++#if defined(ARM64_BOARD_CONFIG_J8)
++/* pexpert/arm/pe_fiq.c: send a GICv2 SGI to one CPU interface. */
++extern void pe_gicv2_send_ipi(uint32_t target_cpu, uint32_t sgi);
++#endif
++
+ SECURITY_READ_ONLY_LATE(struct percpu_base) percpu_base;
+ vm_address_t     percpu_base_cur;
+ cpu_data_t       PERCPU_DATA(cpu_data);
+@@ -506,8 +511,13 @@ cpu_signal_internal(cpu_data_t *target_proc,
+ 			} else {
+ 				PE_cpu_signal_deferred(getCpuDatap()->cpu_id, target_proc->cpu_id);
+ 			}
++#else
++#if defined(ARM64_BOARD_CONFIG_J8)
++			/* GICv2 has no deferred IPI; send the SGI now. */
++			pe_gicv2_send_ipi((uint32_t)target_proc->cpu_id, J8_IPI_SGI);
+ #else
+ 			PE_cpu_signal_deferred(getCpuDatap()->cpu_id, target_proc->cpu_id);
++#endif
+ #endif /* defined(HAS_IPI) */
+ 		} else {
+ #if defined(HAS_IPI)
+@@ -516,8 +526,12 @@ cpu_signal_internal(cpu_data_t *target_proc,
+ 			} else {
+ 				PE_cpu_signal(getCpuDatap()->cpu_id, target_proc->cpu_id);
+ 			}
++#else
++#if defined(ARM64_BOARD_CONFIG_J8)
++			pe_gicv2_send_ipi((uint32_t)target_proc->cpu_id, J8_IPI_SGI);
+ #else
+ 			PE_cpu_signal(getCpuDatap()->cpu_id, target_proc->cpu_id);
++#endif
+ #endif /* defined(HAS_IPI) */
+ 		}
+ 	}
+@@ -552,8 +566,12 @@ cpu_signal_cancel(cpu_data_t *target_proc)
+ 		} else {
+ 			PE_cpu_signal_cancel(getCpuDatap()->cpu_id, target_proc->cpu_id);
+ 		}
++#else
++#if defined(ARM64_BOARD_CONFIG_J8)
++		/* A GICv2 SGI cannot be retracted; nothing to cancel. */
+ #else
+ 		PE_cpu_signal_cancel(getCpuDatap()->cpu_id, target_proc->cpu_id);
++#endif
+ #endif /* defined(HAS_IPI) */
+ 	}
+ }
+diff --git a/osfmk/arm64/sleh.c b/osfmk/arm64/sleh.c
+index b8be8df..9e98264 100644
+--- a/osfmk/arm64/sleh.c
++++ b/osfmk/arm64/sleh.c
+@@ -1888,6 +1888,45 @@ sleh_irq(arm_saved_state_t *state)
+ 		__builtin_arm_wsr64("ICC_EOIR1_EL1", iar);
+ 	}
+ 	__builtin_arm_isb(ISB_SY);
++#elif defined(ARM64_BOARD_CONFIG_J8)
++	/*
++	 * GICv2: TrustZone owns Group 0, so the virtual timer and IPIs arrive
++	 * here as Group 1 IRQs. Acknowledge through GICC_IAR and complete
++	 * through GICC_EOIR; the INTID identifies the source.
++	 */
++	extern uint32_t pe_gicv2_ack(void);
++	extern void pe_gicv2_eoi(uint32_t iar);
++
++	uint32_t iar = pe_gicv2_ack();
++	uint32_t intid = iar & 0x3FFu;
++
++	if (intid >= 1020) {
++		return; /* spurious */
++	}
++	if (intid == J8_VTIMER_INTID) {
++		sleh_interrupt_handler_prologue(state, DBG_INTR_TYPE_TIMER);
++		cdp->cpu_decrementer = -1; /* Large */
++		INTERRUPT_MASKED_DEBUG_START(rtclock_intr, DBG_INTR_TYPE_TIMER);
++		rtclock_intr(TRUE);
++		INTERRUPT_MASKED_DEBUG_END();
++		pe_gicv2_eoi(iar);
++	} else if (intid < 16) {
++		sleh_interrupt_handler_prologue(state, DBG_INTR_TYPE_IPI);
++		/* Ack before handling so an IPI raised meanwhile is not lost. */
++		pe_gicv2_eoi(iar);
++		__builtin_arm_isb(ISB_SY);
++		cpu_signal_handler();
++	} else {
++		sleh_interrupt_handler_prologue(state, DBG_INTR_TYPE_OTHER);
++		if (cdp->interrupt_handler) {
++			cdp->interrupt_handler(cdp->interrupt_target,
++			    cdp->interrupt_refCon,
++			    cdp->interrupt_nub,
++			    intid);
++		}
++		pe_gicv2_eoi(iar);
++	}
++	__builtin_arm_isb(ISB_SY);
+ #else
+ 	sleh_interrupt_handler_prologue(state, DBG_INTR_TYPE_OTHER);
+ 
+diff --git a/pexpert/arm/pe_fiq.c b/pexpert/arm/pe_fiq.c
+index 6089db9..5d2b242 100644
+--- a/pexpert/arm/pe_fiq.c
++++ b/pexpert/arm/pe_fiq.c
+@@ -222,9 +222,123 @@ pe_init_fiq()
+ 	__builtin_arm_isb(ISB_SY);
+ #endif /* SWEET */
+ }
++#else  /* !HAS_GIC_V3 */
++
++#if defined(ARM64_BOARD_CONFIG_J8)
++/*
++ * GICv2 (qcom,msm-qgic2). XNU's GICv3 path uses system registers and
++ * redistributors; the J8 has neither. Group 0 belongs to TrustZone, so the
++ * virtual timer (PPI 19) and IPIs (SGI 1) are Group 1 IRQs: acknowledged via
++ * GICC_IAR and completed via GICC_EOIR in sleh_irq().
++ */
++static vm_offset_t j8_gicd_base;
++static vm_offset_t j8_gicc_base;
++
++static inline uint32_t
++j8_gic_read(vm_offset_t base, uint32_t offset)
++{
++	return *(volatile uint32_t *)(base + offset);
++}
++
++static inline void
++j8_gic_write(vm_offset_t base, uint32_t offset, uint32_t value)
++{
++	*(volatile uint32_t *)(base + offset) = value;
++	__builtin_arm_isb(ISB_SY);
++}
++
++uint32_t
++pe_gicv2_ack(void)
++{
++	return j8_gic_read(j8_gicc_base, GICC_IAR);
++}
++
++void
++pe_gicv2_eoi(uint32_t iar)
++{
++	j8_gic_write(j8_gicc_base, GICC_EOIR, iar);
++}
++
++void
++pe_gicv2_send_ipi(uint32_t target_cpu, uint32_t sgi)
++{
++	/* GICv2 SGIR: target list in bits [23:16], SGI number in bits [3:0]. */
++	j8_gic_write(j8_gicd_base, GICD_SGIR,
++	    ((1u << (target_cpu & 7u)) << 16) | (sgi & 0xfu));
++}
++
++static void
++j8_gicv2_map(void)
++{
++	DTEntry entry;
++	void const *prop;
++	unsigned int prop_size;
++	uint64_t gicd = J8_GICD_BASE;
++	uint64_t gicc = J8_GICC_BASE;
++	uint64_t gicd_size = 0x1000;
++	uint64_t gicc_size = 0x2000;
++	vm_offset_t soc_base = pe_arm_get_soc_base_phys();
++
++	/*
++	 * Prefer the device tree: the J8 ADT and the QEMU harness provide the
++	 * same /arm-io/gic node as the GICv3 path. Fall back to the measured
++	 * J8 bases so a minimal ADT can still bring the timer up.
++	 */
++	if (SecureDTLookupEntry(NULL, "/arm-io/gic", &entry) == kSuccess &&
++	    SecureDTGetProperty(entry, "reg", &prop, &prop_size) == kSuccess &&
++	    prop_size >= 4 * sizeof(uint64_t)) {
++		gicd = ((uint64_t const *)prop)[0];
++		gicd_size = ((uint64_t const *)prop)[1];
++		gicc = ((uint64_t const *)prop)[2];
++		gicc_size = ((uint64_t const *)prop)[3];
++	}
++
++	j8_gicd_base = ml_io_map(soc_base + gicd, gicd_size);
++	j8_gicc_base = ml_io_map(soc_base + gicc, gicc_size);
++	if (!j8_gicd_base || !j8_gicc_base) {
++		panic("%s: cannot map GICv2 distributor/CPU interface", __func__);
++	}
++}
++
++void
++pe_init_fiq(void)
++{
++	unsigned int i;
++
++	if (!j8_gicd_base) {
++		j8_gicv2_map();
++
++		/* Distributor: all SGIs/PPIs are non-secure Group 1. */
++		j8_gic_write(j8_gicd_base, GICD_CTLR, 0);
++		j8_gic_write(j8_gicd_base, GICD_IGROUPR, 0xFFFFFFFFu);
++		for (i = 0; i < 32; i += 4) {
++			j8_gic_write(j8_gicd_base, GICD_IPRIORITYR + i, 0xA0A0A0A0u);
++		}
++		/*
++		 * Virtual timer PPI 19 is level-sensitive. GICD_ICFGR1 covers
++		 * PPIs 16..31, two bits per interrupt; bit[2n+1] = level.
++		 */
++		uint32_t icfgr = j8_gic_read(j8_gicd_base, GICD_ICFGR + 4);
++		icfgr |= (1u << (((J8_VTIMER_INTID - 16) * 2) + 1));
++		j8_gic_write(j8_gicd_base, GICD_ICFGR + 4, icfgr);
++		j8_gic_write(j8_gicd_base, GICD_ISENABLER,
++		    (1u << J8_VTIMER_INTID) | (1u << J8_IPI_SGI));
++		j8_gic_write(j8_gicd_base, GICD_CTLR, GICD_CTLR_ENABLEGRP1);
++	}
++
++	/* CPU interface: banked per core, initialized on every CPU. */
++	j8_gic_write(j8_gicc_base, GICC_PMR, 0xFF);
++	j8_gic_write(j8_gicc_base, GICC_BPR, 0);
++	j8_gic_write(j8_gicc_base, GICC_CTLR, GICC_CTLR_ENABLEGRP1);
++	/* Banked PPI/SGI enables for this core; harmless to repeat. */
++	j8_gic_write(j8_gicd_base, GICD_ISENABLER,
++	    (1u << J8_VTIMER_INTID) | (1u << J8_IPI_SGI));
++}
+ #else
+ void
+ pe_init_fiq()
+ {
+ }
+ #endif
++
++#endif /* HAS_GIC_V3 */
+diff --git a/pexpert/pexpert/arm64/J8.h b/pexpert/pexpert/arm64/J8.h
+index 5fb00e2..f135823 100644
+--- a/pexpert/pexpert/arm64/J8.h
++++ b/pexpert/pexpert/arm64/J8.h
+@@ -52,16 +52,27 @@
+ #define J8_GICC_BASE              0x0b002000
+ 
+ #define GICD_CTLR                 0x000
++#define GICD_IGROUPR              0x080
+ #define GICD_ISENABLER            0x100
+ #define GICD_ICENABLER            0x180
+ #define GICD_IPRIORITYR           0x400
+ #define GICD_ITARGETSR            0x800
++#define GICD_ICFGR                0xc00
+ #define GICD_SGIR                 0xf00
+ #define GICC_CTLR                 0x000
+ #define GICC_PMR                  0x004
++#define GICC_BPR                  0x008
+ #define GICC_IAR                  0x00c
+ #define GICC_EOIR                 0x010
+ 
++/*
++ * Non-secure view: Group 0 belongs to TrustZone, so only the Group 1 enable
++ * bits are writable. GICD_CTLR bit 1 is EnableGrp1; the Non-secure GICC_CTLR
++ * aliases EnableGrp1 to bit 0.
++ */
++#define GICD_CTLR_ENABLEGRP1      0x00000002
++#define GICC_CTLR_ENABLEGRP1      0x00000001
++
+ /*
+  * Qualcomm numbers the architected timer PPIs 1/2/3/0 (secure phys, phys,
+  * virt, hyp) instead of the usual 13/14/11/10: the virtual timer XNU uses
