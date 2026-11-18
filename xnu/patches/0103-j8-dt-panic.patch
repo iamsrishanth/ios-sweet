@@ -1,0 +1,16 @@
+diff --git a/pexpert/arm/pe_init.c b/pexpert/arm/pe_init.c
+index 47f39e5..d25ca5f 100644
+--- a/pexpert/arm/pe_init.c
++++ b/pexpert/arm/pe_init.c
+@@ -377,8 +377,9 @@ PE_lockdown_iokit(void)
+ 	 * hardware protections.
+ 	 */
+ #if defined(ARM64_BOARD_CONFIG_J8)
+-	printf("J8: pre-match dt head=%p size=%u\n",
+-	    PE_state.deviceTreeHead, (unsigned)PE_state.deviceTreeSize);
++	panic("J8: DT head=%p size=%u magic=%08x",
++	    PE_state.deviceTreeHead, (unsigned)PE_state.deviceTreeSize,
++	    PE_state.deviceTreeHead ? *(uint32_t *)PE_state.deviceTreeHead : 0);
+ #endif
+ 	StartIOKitMatching();
+ }
