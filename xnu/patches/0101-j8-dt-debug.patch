@@ -1,0 +1,26 @@
+diff --git a/pexpert/arm/pe_init.c b/pexpert/arm/pe_init.c
+index f592d33..6a78f8a 100644
+--- a/pexpert/arm/pe_init.c
++++ b/pexpert/arm/pe_init.c
+@@ -421,6 +421,21 @@ PE_init_platform(boolean_t vm_initialized, void *args)
+ 		 */
+ 		SecureDTInit(PE_state.deviceTreeHead, PE_state.deviceTreeSize);
+ 		pe_identify_machine(boot_args_ptr);
++#if defined(ARM64_BOARD_CONFIG_J8)
++		printf("J8: bootargs=%p dtP=%p len=%u head=%p size=%u\n",
++		    boot_args_ptr, boot_args_ptr->deviceTreeP,
++		    (unsigned)boot_args_ptr->deviceTreeLength,
++		    PE_state.deviceTreeHead,
++		    (unsigned)PE_state.deviceTreeSize);
++		{
++			DTEntry j8_root;
++			if (SecureDTFindEntry("name", "device-tree", &j8_root) == kSuccess) {
++				printf("J8: DT root found\n");
++			} else {
++				printf("J8: DT root NOT found\n");
++			}
++		}
++#endif
+ 	} else {
+ 		pe_arm_init_interrupts(args);
+ 		pe_arm_init_debug(args);
