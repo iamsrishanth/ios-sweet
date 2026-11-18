@@ -1,0 +1,38 @@
+diff --git a/iokit/Kernel/arm/SweetPlatformExpert.cpp b/iokit/Kernel/arm/SweetPlatformExpert.cpp
+index 0631685..7a9b34d 100644
+--- a/iokit/Kernel/arm/SweetPlatformExpert.cpp
++++ b/iokit/Kernel/arm/SweetPlatformExpert.cpp
+@@ -5,7 +5,7 @@
+  */
+ #include <pexpert/arm64/board_config.h>
+ 
+-#if defined(SWEET)
++#if defined(SWEET) || defined(ARM64_BOARD_CONFIG_J8)
+ #include <IOKit/IOPlatformExpert.h>
+ #include <IOKit/IODeviceTreeSupport.h>
+ #include <IOKit/IOLib.h>
+@@ -79,4 +79,4 @@ SweetPlatformExpert::processTopLevel(IORegistryEntry *root)
+  * "compatible" string and "model" (D22AP / iPhone10,3 in the ADT), which
+  * is what the iPhone userland (MobileGestalt) expects.
+  */
+-#endif /* SWEET */
++#endif /* SWEET || ARM64_BOARD_CONFIG_J8 */
+diff --git a/iokit/KernelConfigTables.cpp b/iokit/KernelConfigTables.cpp
+index 92f3e26..40eb3f8 100644
+--- a/iokit/KernelConfigTables.cpp
++++ b/iokit/KernelConfigTables.cpp
+@@ -34,6 +34,14 @@
+ 
+ const char * gIOKernelConfigTables =
+     "("
++#if defined(ARM64_BOARD_CONFIG_J8)
++    "   {"
++    "     'IOClass'         = SweetPlatformExpert;"
++    "     'IOProviderClass' = IOPlatformExpertDevice;"
++    "     'IONameMatch'     = 'xiaomi,sweet';"
++    "     'IOProbeScore'    = 10000:32;"
++    "   },"
++#endif
+ #if defined(ARM64_BOARD_CONFIG_SWEET)
+     "   {"
+     "     'IOClass'         = SweetPlatformExpert;"
