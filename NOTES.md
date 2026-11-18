@@ -76,6 +76,13 @@ State at end of session:
   pool failed to acquire a runner for 15 minutes, so the workflow uses
   `macos-15-intel`. Xcode 16's `iig` needed the `IORPC.kernelContent` backport
   (patch 0083). See `docs/j8/BUILD.md` section 4 for the exact recipe and result.
+- 2026-11-18: GitHub Actions dispatch now returns HTTP 422 "Actions has been
+  disabled for this repository", although `GET /actions/permissions` reports
+  `enabled: true`. The last successful run was **44162509756** (2026-11-17
+  20:08 UTC). Patch **0097** (J8 kmem placement at the largest hole + guard
+  page) is pushed at **42addf2** but has not been built. This needs the repo
+  owner to re-enable Actions or provide another macOS runner; no local xnu
+  build is possible on this Windows host.
 - Rollback anchors: ROM `boot.img` sha256
   `111aa3ed0a5191ada9e1b32aa7ed82d495f27df2ab67561415c58ca2b873a2ab`; Odin AP tar
   sha256 `ee766f98ea5682f0602c23aa3f3e1ce770551f904a437a9a2bb1d61b8d3c9a82`.
