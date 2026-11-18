@@ -101,6 +101,32 @@ not instantiated. Next approaches:
 3. instantiate the platform expert unconditionally in `StartIOKitMatching` to
    see whether the fault is the NULL global or the DT data.
 
+## Root-name match fix (0104)
+
+`IODeviceTreeAlloc` renames the root registry entry to the **first compatible
+string**:
+
+```c
+// make root name first compatible entry (purely cosmetic)
+parent->setName((const char *) prop->getBytesNoCopy());
+```
+
+For our ADT that string is `D22AP`, not `xiaomi,sweet`. Since
+`IODTPlatformExpert::probe` compares `IONameMatch` with `provider->copyName()`,
+the platform expert never matched. Patch 0104 uses `IONameMatch = 'D22AP'` and
+removes the temporary DT panic.
+
+Result (run **44397240748**): the old `NULL+0x28` fault at
+`pc 0xfffffff0077f5f74` is **gone**. The kernel now panics earlier, with an
+unprintable console (black screen; QEMU `-d int` shows an exception loop with
+ELRs `0x733e3ec`, `0x78fecec`, `0x73370ac` and a first `0x7346df4`/`FAR 0x1b0`).
+So the platform expert now matches, but its start/`processTopLevel` fails before
+the console is available.
+
+Next: instrument `SweetPlatformExpert::start`/`processTopLevel` through a
+non-console channel (a fixed memory store read via QEMU), or simplify `start`
+to isolate the failing call.
+
 ## Meaning
 
 - The 4 KiB non-large-memory kernel now executes deep into XNU VM and platform
