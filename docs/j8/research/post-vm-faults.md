@@ -84,6 +84,23 @@ Next diagnostic: print `PE_state.deviceTreeHead`, `deviceTreeSize` and
 `PE_state.bootArgs` in the early platform init (J8 only), and the
 `IOPlatformExpert` match/provider path, then fix the ADT pointer or the match.
 
+## DT diagnostics (0101-0103): console not available
+
+Patch 0101 printed the DT pointers in `PE_init_platform` and patch 0102 moved the
+print to `PE_lockdown_iokit`; both produced a **black screen**. QEMU `-d int`
+shows an early data abort at `FAR 0x1b0` (ELR `0xfffffff007346df4`) in the
+console/print path, before the framebuffer can show text. Replacing the print
+with a `panic` (0103) also stays black for the same reason.
+
+So the DT head/size could not be read this way, and the platform expert is still
+not instantiated. Next approaches:
+
+1. store `PE_state.deviceTreeHead`/`deviceTreeSize` into a fixed mapped page and
+   read it with QEMU `pmemsave` (no console dependency), or
+2. use the QEMU gdb stub to read `PE_state` directly, or
+3. instantiate the platform expert unconditionally in `StartIOKitMatching` to
+   see whether the fault is the NULL global or the DT data.
+
 ## Meaning
 
 - The 4 KiB non-large-memory kernel now executes deep into XNU VM and platform
