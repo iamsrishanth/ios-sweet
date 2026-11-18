@@ -1,0 +1,78 @@
+diff --git a/osfmk/vm/vm_kern.c b/osfmk/vm/vm_kern.c
+index 04d996c..719a18d 100644
+--- a/osfmk/vm/vm_kern.c
++++ b/osfmk/vm/vm_kern.c
+@@ -3399,6 +3399,40 @@ kmem_fuzz_start(void)
+ 	return kmapoff_kaddr + kmapoff_size;
+ }
+ 
++#if defined(ARM64_BOARD_CONFIG_J8)
++/*
++ * Return the start of the largest free hole in the map. The kmem claims are
++ * sized to fill exactly one hole, so they must start at that hole's beginning;
++ * starting at the map base can place the first claim in a smaller hole and
++ * leave the largest hole unreachable for later claims.
++ */
++static vm_map_offset_t
++kmem_largest_hole_start(vm_map_t map)
++{
++	vm_map_entry_t entry;
++	vm_map_offset_t prev, best_start = map->min_offset;
++	vm_map_size_t free, best_free = 0;
++	boolean_t end;
++
++	vm_map_lock_read(map);
++	prev = map->min_offset;
++	for (entry = vm_map_first_entry(map);; entry = entry->vme_next) {
++		end = (entry == vm_map_to_entry(map));
++		free = end ? (entry->vme_end - prev) : (entry->vme_start - prev);
++		if (free > best_free) {
++			best_free = free;
++			best_start = prev;
++		}
++		if (end) {
++			break;
++		}
++		prev = entry->vme_end;
++	}
++	vm_map_unlock_read(map);
++	return best_start;
++}
++#endif /* ARM64_BOARD_CONFIG_J8 */
++
+ /*
+  * Generate a randomly shuffled array of indices from 0 to count - 1
+  */
+@@ -3570,6 +3604,15 @@ kmem_add_extra_claims(void)
+ 	 * Add claims for kmem's ranges
+ 	 */
+ 	data_range_size += kmem_add_ptr_claims();
++#if defined(ARM64_BOARD_CONFIG_J8)
++	/*
++	 * Leave a guard page: the claims fill the largest hole exactly, and an
++	 * allocation that ends exactly at map->max_offset can fail.
++	 */
++	if (data_range_size > PAGE_SIZE) {
++		data_range_size -= PAGE_SIZE;
++	}
++#endif
+ 	assert(data_range_size + sprayqtn_range_size +
+ 	    ((ptr_range_size + kmem_meta_size) * kmem_ptr_ranges) <=
+ 	    largest_free_size);
+@@ -3623,12 +3666,11 @@ kmem_scramble_ranges(void)
+ 	 */
+ #if defined(ARM64_BOARD_CONFIG_J8)
+ 	/*
+-	 * J8: the non-large-memory kernel_map is only ~112 GiB and the fuzzed
+-	 * cursor left the 8 GiB zones claim without a contiguous hole while
+-	 * the map's 64 GiB lower hole stayed unused. Start at the map base so
+-	 * the claims pack into the lower hole.
++	 * J8: the non-large-memory kernel_map is only ~112 GiB and the claims
++	 * are sized to fill exactly one hole. Start at the beginning of the
++	 * largest hole so the pack cannot cross into a smaller one.
+ 	 */
+-	start = kernel_map->min_offset;
++	start = kmem_largest_hole_start(kernel_map);
+ #else
+ 	start = kmem_fuzz_start();
+ #endif
