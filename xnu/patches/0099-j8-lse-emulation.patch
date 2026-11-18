@@ -1,0 +1,143 @@
+diff --git a/osfmk/arm64/sleh.c b/osfmk/arm64/sleh.c
+index d0a762c..f417cc8 100644
+--- a/osfmk/arm64/sleh.c
++++ b/osfmk/arm64/sleh.c
+@@ -874,6 +874,124 @@ sleh_synchronous(arm_context_t *context, uint32_t esr, vm_offset_t far)
+ #endif
+ }
+ 
++#if defined(ARM64_BOARD_CONFIG_J8)
++/*
++ * Cortex-A53 is ARMv8.0 and has no LSE atomics, but prebuilt KDK code contains
++ * them. Emulate the simple LSE memory operations when they trap, so the kernel
++ * can run on J8. Returns true when the instruction was handled.
++ */
++static int64_t
++j8_lse_signed(uint64_t v, uint32_t size)
++{
++	switch (size) {
++	case 0:
++		return (int8_t)v;
++	case 1:
++		return (int16_t)v;
++	case 2:
++		return (int32_t)v;
++	default:
++		return (int64_t)v;
++	}
++}
++
++static uint64_t
++j8_lse_new(uint32_t opc, uint64_t old, uint64_t rs, uint32_t size)
++{
++	uint64_t mask = (size == 0) ? 0xffULL :
++	    (size == 1) ? 0xffffULL :
++	    (size == 2) ? 0xffffffffULL : ~0ULL;
++	uint64_t cur = old & mask;
++	uint64_t val = rs & mask;
++
++	switch (opc) {
++	case 0:                 /* LDADD */
++		return (cur + val) & mask;
++	case 1:                 /* LDCLR */
++		return cur & ~val & mask;
++	case 2:                 /* LDEOR */
++		return (cur ^ val) & mask;
++	case 3:                 /* LDSET */
++		return (cur | val) & mask;
++	case 4:                 /* LDSMAX */
++		return j8_lse_signed(cur, size) >
++		    j8_lse_signed(val, size) ? cur : val;
++	case 5:                 /* LDSMIN */
++		return j8_lse_signed(cur, size) <
++		    j8_lse_signed(val, size) ? cur : val;
++	case 6:                 /* LDMAX */
++		return cur > val ? cur : val;
++	case 7:                 /* LDMIN */
++		return cur < val ? cur : val;
++	case 8:                 /* SWP */
++		return val;
++	default:
++		return old;
++	}
++}
++
++static boolean_t
++j8_lse_emulate(arm_saved_state_t *state, uint32_t instr)
++{
++	if ((instr & 0x3F200C00) != 0x38200000) {
++		return FALSE;
++	}
++
++	uint32_t size = instr >> 30;
++	uint32_t opc = (instr >> 12) & 0xf;
++	uint32_t rs = (instr >> 16) & 0x1f;
++	uint32_t rn = (instr >> 5) & 0x1f;
++	uint32_t rt = instr & 0x1f;
++	uint64_t addr = get_saved_state_reg(state, rn);
++	uint64_t rsval = get_saved_state_reg(state, rs);
++	uint64_t old;
++
++	if (opc > 8) {
++		return FALSE;
++	}
++
++	if (size == 3) {
++		volatile uint64_t *p = (volatile uint64_t *)(uintptr_t)addr;
++		do {
++			old = __atomic_load_n(p, __ATOMIC_ACQUIRE);
++			uint64_t newval = j8_lse_new(opc, old, rsval, size);
++			if (__atomic_compare_exchange_n(p, &old, newval, false,
++			    __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
++				break;
++			}
++		} while (true);
++	} else if (size == 2) {
++		volatile uint32_t *p = (volatile uint32_t *)(uintptr_t)addr;
++		uint32_t old32;
++		do {
++			old32 = __atomic_load_n(p, __ATOMIC_ACQUIRE);
++			uint32_t newval = (uint32_t)j8_lse_new(opc, old32, rsval, size);
++			if (__atomic_compare_exchange_n(p, &old32, newval, false,
++			    __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
++				break;
++			}
++		} while (true);
++		old = old32;
++	} else if (size == 1) {
++		volatile uint16_t *p = (volatile uint16_t *)(uintptr_t)addr;
++		uint16_t old16 = __atomic_load_n(p, __ATOMIC_ACQUIRE);
++		__atomic_store_n(p, (uint16_t)j8_lse_new(opc, old16, rsval, size),
++		    __ATOMIC_RELEASE);
++		old = old16;
++	} else {
++		volatile uint8_t *p = (volatile uint8_t *)(uintptr_t)addr;
++		uint8_t old8 = __atomic_load_n(p, __ATOMIC_ACQUIRE);
++		__atomic_store_n(p, (uint8_t)j8_lse_new(opc, old8, rsval, size),
++		    __ATOMIC_RELEASE);
++		old = old8;
++	}
++
++	set_saved_state_reg(state, rt, old);
++	set_saved_state_pc(state, get_saved_state_pc(state) + 4);
++	return TRUE;
++}
++#endif /* ARM64_BOARD_CONFIG_J8 */
++
+ /*
+  * Uncategorized exceptions are a catch-all for general execution errors.
+  * ARM64_TODO: For now, we assume this is for undefined instruction exceptions.
+@@ -888,6 +1006,13 @@ handle_uncategorized(arm_saved_state_t *state)
+ 
+ 	COPYIN(get_saved_state_pc(state), (char *)&instr, sizeof(instr));
+ 
++#if defined(ARM64_BOARD_CONFIG_J8)
++	if (PSR64_IS_KERNEL(get_saved_state_cpsr(state)) &&
++	    j8_lse_emulate(state, instr)) {
++		return;
++	}
++#endif
++
+ #if CONFIG_DTRACE
+ 
+ 	if (PSR64_IS_USER64(get_saved_state_cpsr(state))) {
