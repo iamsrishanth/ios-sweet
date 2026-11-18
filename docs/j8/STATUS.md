@@ -28,9 +28,9 @@ evidence.
 | Partition map / storage type (eMMC, not UFS) | **hardware-verified** | live `/proc/partitions`, `/dev/block/by-name`, device tree |
 | Recovery path and rollback assets | **hardware-verified** *(historical Android use)* + documented | `INSTALL-RECOVERY.md` |
 | Page-size capability (`TGran16`) | **documented: no 16K** (unit confirmation failed) | Cortex-A53 r0p4 TRM `TGran16 = 0x0`; EL0 access is architecturally absent (SIGILL measured); the EL1 probe image was built and flashed but the **bootloader rejected it**, so no on-unit read exists |
-| XNU kernel built for J8 | **QEMU: boots into VM init, panics** | CI run 44074310435: `kernel.development.j8`, 16,821,648 bytes, SHA-256 `0d40a6b0bd180ea7fea9057286dd162b36f47b055bb9584f2b4c65e2060c8a8a`, plain ARM64; patches 0082-0094. QEMU reaches `pmap_startup`/`vm_page_bootstrap`, then panics at `kmem_range_init`. No phone boot. |
+| XNU kernel built for J8 | **QEMU: VM init complete, platform faults** | CI run **44263886581**: `kernel.release.j8`, 11,940,088 bytes, SHA-256 `a8675feb7c03a26955133c8cc93f63c653c5973506e0aa21bfc3f8841cac5256`, plain ARM64; patches 0082-0098. VM init completes; A53 then traps on an LSE `ldadd` in prebuilt code, and an LSE-capable CPU reaches a `NULL+0x28` data abort. No phone boot. |
 | J8 shim (4 KiB granule MMU) | **researched** | `shim/mmu.c` is 16 KiB-only |
-| Anything booting on the J8 from this project | **QEMU only** | reaches XNU VM init, panics at `kmem_range_init`; nothing flashed since the rejected probe |
+| Anything booting on the J8 from this project | **QEMU only** | VM init complete; blocked by LSE (A53) and a NULL platform pointer; nothing flashed since the rejected probe |
 
 ## 3. Feature matrix
 
@@ -79,6 +79,8 @@ evidence.
 | 2026-11-17 11:49 UTC | QEMU J8 boot, non-large layout + no-LSE build (run **44074310435**) | **boots into XNU VM init**: `pmap_startup`, 76,367 free pages, 97 VM maps; then panics at `kmem_range_init: vm_map_locate_space failing for claim kmem_ptr_range @vm_kern.c:3645` | `evidence/qemu-2026-11-17-kmem-range-panic.png` |
 | 2026-11-17 14:52 UTC | Diagnostic panic with claim sizes (run **44098877305**) | `zones` 8 GiB failed at `start=0xfffffff0840e0000`; largest hole 26 GiB; claims were packed forward from a fuzzed cursor | `evidence/qemu-2026-11-17-kmem-zones-debug.png` |
 | 2026-11-17 20:08 UTC | J8 **RELEASE** build, no KASAN (run **44162509756**) | boots to VM init; same failure: `zones` 8 GiB at `start=0xfffffff597a18000`, map 112 GiB, largest hole 45.9 GiB. KASAN is not the cause | `evidence/qemu-2026-11-17-kmem-zones-release.png` |
+| 2026-11-18 08:21 UTC | J8 RELEASE, zone map capped at 2 GiB (run **44263886581**) | **`kmem_range_init` passes**: VM bootstrap done (86 maps), zone map/compressor/firehose configured; A53 then panics on `ldadd x8, x8, [x9]` (LSE) at pc `0xfffffff0071d0a54` | `evidence/qemu-2026-11-18-lse-undefined-a53.png` |
+| 2026-11-18 08:21 UTC | Same kernel on `-cpu max` (LSE capable) | boots past VM init; panic `Kernel data abort` at pc `0xfffffff0077f5f74`, ESR `0x96000005`, FAR `0x28` (`NULL+0x28`) | `evidence/qemu-2026-11-18-data-abort-maxcpu.png` |
 | - | Any J8 boot of XNU/iOS | not attempted: no GICv2 delivery, shim, device tree or drivers | - |
 
 ## 5. What this task implemented
@@ -128,12 +130,14 @@ device Apple recognises, and is out of scope for this port.
 2. **Done: J8 machine config and GICv2 path** — patches 0082-0087 compile and
    link (CI 44033283321). The GICv2 timer/SGI dispatch is compile-verified only;
    PPI 19 and the non-secure Group 1 view still need a runtime check.
-3. **QEMU J8: boots into XNU VM init, panics at `kmem_range_init`.** The
-   non-large-memory layout (patch 0092) and the no-LSE build
-   (`-mcpu=cortex-a53+crypto`, patches 0093/0094) got past the MMU and the
-   LSE atomics. Next: fix the `kmem_ptr_range` claim (`vm_kern.c:3645`) against
-   `VM_MIN_KERNEL_ADDRESS`/`LOW_GLOBAL_BASE_ADDRESS` and the kernel image span.
-   Evidence: `research/4k-boot-va.md`, `evidence/qemu-2026-11-17-kmem-range-panic.png`.
+3. **QEMU J8: VM init complete; A53 blocked by a remaining LSE.** Patch 0098
+   (2 GiB zone map) fixed `kmem_range_init`; the kernel completes VM init,
+   compressor and firehose setup. On the A53 it then traps on `ldadd` (LSE) in
+   prebuilt code; on `-cpu max` it reaches a `NULL+0x28` data abort. Next:
+   remove the remaining LSE (library or text post-processing), then fix the NULL
+   pointer. Evidence: `research/post-vm-faults.md`,
+   `evidence/qemu-2026-11-18-lse-undefined-a53.png` and
+   `...-data-abort-maxcpu.png`.
 4. **Port the shim's own MMU to 4 KiB** (`mmu.c`; the kernel is entered with the
    MMU off, so this is the shim's identity map only), then add the J8 shim
    pieces: GICv2, SDCC/eMMC kernel loading, display and the J8 ADT.

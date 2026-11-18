@@ -56,45 +56,42 @@ State at end of session:
   SGIR instead of the Apple-only `PE_cpu_signal`. Assumptions still unverified:
   PPI 19 numbering and the non-secure GICC Group 1 bit. PSCI CPU_ON remains
   SWEET-only, so only the boot CPU has interrupts.
-- QEMU J8 (2026-11-17/18): the working direction is the **non-large-memory
-  layout** (0092: link `0xfffffff007004000`, T1SZ 25) with
-  `-mcpu=cortex-a53+crypto` (0093: clang had emitted LSE `ldadd`, which the A53
-  cannot execute) and ARMv8.0 LL/SC for the two `casa` instructions in
-  `commpage_asm.s` (0094). QEMU runs XNU 22.6.0 into VM init: `pmap_startup`,
-  76,367 free pages, 97 VM maps, then `kmem_range_init` fails. Diagnostics
-  (0095) show the shuffled claims packed forward from a fuzzed cursor; 0096
-  starts at the map base, but DEVELOPMENT then underflowed `kmem_data_range`.
-  A RELEASE build without KASAN (run **44162509756**) fails the same way:
-  `zones` 8 GiB at `start=0xfffffff597a18000`, map 112 GiB, largest hole
-  45.9 GiB. KASAN is not the cause; the 4K non-large map is too tight for the
-  claim scheme. Screenshots:
-  `docs/j8/evidence/qemu-2026-11-17-kmem-zones-debug.png` and
-  `...-kmem-zones-release.png`. The large-memory L0 path (0089/0091) faulted at
-  `_arm_init` despite correct TCR/TTBR1/L0 entries and is not the current
-  direction.
+- QEMU J8 (2026-11-17/18): non-large layout (0092), `-mcpu=cortex-a53+crypto`
+  (0093), commpage LL/SC (0094), kmem diagnostics (0095), largest-hole placement
+  (0096/0097) and a **2 GiB J8 zone map** (0098). The last one fixed
+  `kmem_range_init`: VM bootstrap completes (86 maps), and the zone map,
+  compressor and firehose are configured. The A53 then traps on another LSE
+  `ldadd` (`pc 0xfffffff0071d0a54`, unnamed/prebuilt code); an LSE-capable
+  `-cpu max` boots past that and panics with a `Kernel data abort` at
+  `NULL+0x28` (`pc 0xfffffff0077f5f74`, ESR `0x96000005`). So the immediate J8
+  blocker is the remaining LSE in prebuilt code, then the NULL platform
+  pointer. Evidence: `docs/j8/evidence/qemu-2026-11-18-lse-undefined-a53.png`
+  and `...-data-abort-maxcpu.png`; analysis
+  `docs/j8/research/post-vm-faults.md`. The large-memory L0 path (0089/0091)
+  faulted at `_arm_init` despite correct TCR/TTBR1/L0 entries and is not the
+  current direction.
 - CI infrastructure: `macos-14` was retired on 2026-11-02; the `macos-15` arm64
   pool failed to acquire a runner for 15 minutes, so the workflow uses
   `macos-15-intel`. Xcode 16's `iig` needed the `IORPC.kernelContent` backport
   (patch 0083). See `docs/j8/BUILD.md` section 4 for the exact recipe and result.
-- 2026-11-18: GitHub Actions dispatch now returns HTTP 422 "Actions has been
-  disabled for this repository", although `GET /actions/permissions` reports
-  `enabled: true`. The last successful run was **44162509756** (2026-11-17
-  20:08 UTC). Patch **0097** (J8 kmem placement at the largest hole + guard
-  page) is pushed at **42addf2** but has not been built. This needs the repo
-  owner to re-enable Actions or provide another macOS runner; no local xnu
-  build is possible on this Windows host.
+- 2026-11-18: Actions dispatch was temporarily blocked (HTTP 422 "Actions has
+  been disabled for this repository"; the repo is a fork). After enabling from
+  the Actions tab, runs **44261048257** and **44263886581** succeeded. No
+  dispatch issue since; if it recurs, check the Actions tab and billing.
 - Rollback anchors: ROM `boot.img` sha256
   `111aa3ed0a5191ada9e1b32aa7ed82d495f27df2ab67561415c58ca2b873a2ab`; Odin AP tar
   sha256 `ee766f98ea5682f0602c23aa3f3e1ce770551f904a437a9a2bb1d61b8d3c9a82`.
 
 Next actions, in order: (1) **do not re-flash the probe as built** (the
-bootloader rejected it); (2) fix claim placement in `kmem_range_init` (start at
-the largest free hole, or enlarge/split the non-large map) and re-run QEMU
-until serial output and timer ticks appear; (3) add PSCI CPU_ON for the
-secondary cores (still SWEET-only); (4) port the shim's own MMU to 4 KiB and
-add GICv2, SDCC/eMMC loading, display and the J8 ADT; (5) SDCC/eMMC driver;
-(6) display, touch, keys, then GPU, Wi-Fi/BT, modem/audio, App Store. Details
-and gates in `docs/j8/FEASIBILITY.md` section 5 and `docs/j8/STATUS.md`
+bootloader rejected it); (2) remove the remaining LSE `ldadd` in the prebuilt
+kernel code (identify the supplying library/function and avoid it, or
+post-process the text), then fix the `NULL+0x28` data abort
+(`pc 0xfffffff0077f5f74`, ESR `0x96000005`) and re-run QEMU until serial output
+and timer ticks appear; (3) add PSCI CPU_ON for the secondary cores (still
+SWEET-only); (4) port the shim's own MMU to 4 KiB and add GICv2, SDCC/eMMC
+loading, display and the J8 ADT; (5) SDCC/eMMC driver; (6) display, touch, keys,
+then GPU, Wi-Fi/BT, modem/audio, App Store. Details and gates in
+`docs/j8/FEASIBILITY.md` section 5 and `docs/j8/STATUS.md`
 section 7.
 
 ## Agent handoff / active work (2026-10-15, latest)

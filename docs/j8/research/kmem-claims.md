@@ -45,10 +45,15 @@ underflow `kmem_data_range`, confirming the placement sensitivity.
    claim sizes are recomputed to fill the hole, so the total stays the same.
 4. Return to the large-memory walk, which was abandoned at `_arm_init`.
 
-## Build blocker (2026-11-18)
+## Resolution
 
-`gh workflow run` returns HTTP 422 "Actions has been disabled for this
-repository" even though `GET /actions/permissions` reports `enabled: true`.
-The repository is a fork (`dipa-studio/ios-sweet`); forked repositories start
-with Actions disabled, and the API toggle / disable-enable cycle did not clear
-it. A push-triggered run also did not appear. Patch 0097 is pushed but unbuilt.
+Reading the live `kmem_claims` array from guest memory showed the `zones` claim
+registered at `0x2000000000` (128 GiB), the MacOSX `ZONE_MAP_VA_SIZE`, which
+cannot fit the 112 GiB non-large map. Patch 0098 caps the J8 zone map at 2 GiB
+(`ZONE_MAP_MAX` and `ZONE_MAP_VA_SIZE`). With it, `kmem_range_init` passes, VM
+bootstrap completes (86 maps), and the zone map, compressor and firehose are
+configured. The next faults are covered in `post-vm-faults.md`.
+
+The 2026-11-18 Actions block (HTTP 422 for a fork) was resolved by enabling
+Actions from the repository's Actions tab; runs 44261048257 and 44263886581
+then succeeded.
