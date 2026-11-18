@@ -58,15 +58,15 @@ State at end of session:
   SWEET-only, so only the boot CPU has interrupts.
 - QEMU J8 (2026-11-17/18): non-large layout (0092), `-mcpu=cortex-a53+crypto`
   (0093), commpage LL/SC (0094), kmem diagnostics (0095), largest-hole placement
-  (0096/0097) and a **2 GiB J8 zone map** (0098). The last one fixed
-  `kmem_range_init`: VM bootstrap completes (86 maps), and the zone map,
-  compressor and firehose are configured. The A53 then traps on another LSE
-  `ldadd` (`pc 0xfffffff0071d0a54`, unnamed/prebuilt code); an LSE-capable
-  `-cpu max` boots past that and panics with a `Kernel data abort` at
-  `NULL+0x28` (`pc 0xfffffff0077f5f74`, ESR `0x96000005`). So the immediate J8
-  blocker is the remaining LSE in prebuilt code, then the NULL platform
-  pointer. Evidence: `docs/j8/evidence/qemu-2026-11-18-lse-undefined-a53.png`
-  and `...-data-abort-maxcpu.png`; analysis
+  (0096/0097), a **2 GiB J8 zone map** (0098) and **LSE emulation in the
+  undefined handler** (0099). VM init completes (86 maps), zone map, compressor
+  and firehose configure. The A53 now passes the prebuilt LSE `ldadd` and
+  reaches the same `Kernel data abort` as `-cpu max` at `NULL+0x28`
+  (`pc 0xfffffff0077f5f74`, ESR `0x96000005`): the global at
+  `0xfffffff00713e680` is NULL in the platform-expert path (caller strings
+  `chip-id`/`IOPlatformExpert`). Next: instantiate/populate the J8 platform
+  object. Evidence:
+  `docs/j8/evidence/qemu-2026-11-18-lse-emulated-null-abort.png`; analysis
   `docs/j8/research/post-vm-faults.md`. The large-memory L0 path (0089/0091)
   faulted at `_arm_init` despite correct TCR/TTBR1/L0 entries and is not the
   current direction.
@@ -83,14 +83,14 @@ State at end of session:
   sha256 `ee766f98ea5682f0602c23aa3f3e1ce770551f904a437a9a2bb1d61b8d3c9a82`.
 
 Next actions, in order: (1) **do not re-flash the probe as built** (the
-bootloader rejected it); (2) remove the remaining LSE `ldadd` in the prebuilt
-kernel code (identify the supplying library/function and avoid it, or
-post-process the text), then fix the `NULL+0x28` data abort
-(`pc 0xfffffff0077f5f74`, ESR `0x96000005`) and re-run QEMU until serial output
-and timer ticks appear; (3) add PSCI CPU_ON for the secondary cores (still
-SWEET-only); (4) port the shim's own MMU to 4 KiB and add GICv2, SDCC/eMMC
-loading, display and the J8 ADT; (5) SDCC/eMMC driver; (6) display, touch, keys,
-then GPU, Wi-Fi/BT, modem/audio, App Store. Details and gates in
+bootloader rejected it); (2) instantiate/populate the J8 platform-expert object
+(the global at `0xfffffff00713e680` is NULL; caller strings
+`chip-id`/`IOPlatformExpert`) to fix the `NULL+0x28` data abort
+(`pc 0xfffffff0077f5f74`, ESR `0x96000005`), then re-run QEMU until serial
+output and timer ticks appear; (3) add PSCI CPU_ON for the secondary cores
+(still SWEET-only); (4) port the shim's own MMU to 4 KiB and add GICv2,
+SDCC/eMMC loading, display and the J8 ADT; (5) SDCC/eMMC driver; (6) display,
+touch, keys, then GPU, Wi-Fi/BT, modem/audio, App Store. Details and gates in
 `docs/j8/FEASIBILITY.md` section 5 and `docs/j8/STATUS.md`
 section 7.
 

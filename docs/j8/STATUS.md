@@ -28,9 +28,9 @@ evidence.
 | Partition map / storage type (eMMC, not UFS) | **hardware-verified** | live `/proc/partitions`, `/dev/block/by-name`, device tree |
 | Recovery path and rollback assets | **hardware-verified** *(historical Android use)* + documented | `INSTALL-RECOVERY.md` |
 | Page-size capability (`TGran16`) | **documented: no 16K** (unit confirmation failed) | Cortex-A53 r0p4 TRM `TGran16 = 0x0`; EL0 access is architecturally absent (SIGILL measured); the EL1 probe image was built and flashed but the **bootloader rejected it**, so no on-unit read exists |
-| XNU kernel built for J8 | **QEMU: VM init complete, platform faults** | CI run **44263886581**: `kernel.release.j8`, 11,940,088 bytes, SHA-256 `a8675feb7c03a26955133c8cc93f63c653c5973506e0aa21bfc3f8841cac5256`, plain ARM64; patches 0082-0098. VM init completes; A53 then traps on an LSE `ldadd` in prebuilt code, and an LSE-capable CPU reaches a `NULL+0x28` data abort. No phone boot. |
+| XNU kernel built for J8 | **QEMU: VM init complete, platform fault** | CI run **44269840744**: `kernel.release.j8`, 11,940,088 bytes, SHA-256 `a0fa0e326dd8152969c69431bf5f0320ac6eb043c6555ee6f6ea75e12a3d0716`, plain ARM64; patches 0082-0099. VM init completes; LSE atomics are emulated so the A53 reaches the same `NULL+0x28` platform-expert fault as an LSE-capable CPU. No phone boot. |
 | J8 shim (4 KiB granule MMU) | **researched** | `shim/mmu.c` is 16 KiB-only |
-| Anything booting on the J8 from this project | **QEMU only** | VM init complete; blocked by LSE (A53) and a NULL platform pointer; nothing flashed since the rejected probe |
+| Anything booting on the J8 from this project | **QEMU only** | VM init complete; blocked by a NULL platform-expert object; nothing flashed since the rejected probe |
 
 ## 3. Feature matrix
 
@@ -81,6 +81,7 @@ evidence.
 | 2026-11-17 20:08 UTC | J8 **RELEASE** build, no KASAN (run **44162509756**) | boots to VM init; same failure: `zones` 8 GiB at `start=0xfffffff597a18000`, map 112 GiB, largest hole 45.9 GiB. KASAN is not the cause | `evidence/qemu-2026-11-17-kmem-zones-release.png` |
 | 2026-11-18 08:21 UTC | J8 RELEASE, zone map capped at 2 GiB (run **44263886581**) | **`kmem_range_init` passes**: VM bootstrap done (86 maps), zone map/compressor/firehose configured; A53 then panics on `ldadd x8, x8, [x9]` (LSE) at pc `0xfffffff0071d0a54` | `evidence/qemu-2026-11-18-lse-undefined-a53.png` |
 | 2026-11-18 08:21 UTC | Same kernel on `-cpu max` (LSE capable) | boots past VM init; panic `Kernel data abort` at pc `0xfffffff0077f5f74`, ESR `0x96000005`, FAR `0x28` (`NULL+0x28`) | `evidence/qemu-2026-11-18-data-abort-maxcpu.png` |
+| 2026-11-18 09:00 UTC | LSE emulation for J8 (run **44269840744**) | **A53 boots past the LSE**: same `NULL+0x28` platform fault as `-cpu max`; faulting code loads the global at `0xfffffff00713e680` (NULL), caller strings `chip-id`/`IOPlatformExpert` | `evidence/qemu-2026-11-18-lse-emulated-null-abort.png` |
 | - | Any J8 boot of XNU/iOS | not attempted: no GICv2 delivery, shim, device tree or drivers | - |
 
 ## 5. What this task implemented
@@ -130,14 +131,14 @@ device Apple recognises, and is out of scope for this port.
 2. **Done: J8 machine config and GICv2 path** — patches 0082-0087 compile and
    link (CI 44033283321). The GICv2 timer/SGI dispatch is compile-verified only;
    PPI 19 and the non-secure Group 1 view still need a runtime check.
-3. **QEMU J8: VM init complete; A53 blocked by a remaining LSE.** Patch 0098
-   (2 GiB zone map) fixed `kmem_range_init`; the kernel completes VM init,
-   compressor and firehose setup. On the A53 it then traps on `ldadd` (LSE) in
-   prebuilt code; on `-cpu max` it reaches a `NULL+0x28` data abort. Next:
-   remove the remaining LSE (library or text post-processing), then fix the NULL
-   pointer. Evidence: `research/post-vm-faults.md`,
-   `evidence/qemu-2026-11-18-lse-undefined-a53.png` and
-   `...-data-abort-maxcpu.png`.
+3. **QEMU J8: VM init complete; LSE emulated; NULL platform object next.**
+   Patch 0098 (2 GiB zone map) fixed `kmem_range_init`; patch 0099 emulates LSE
+   in the undefined handler, so the A53 now reaches the same `NULL+0x28` data
+   abort as `-cpu max`. The fault is in the platform-expert path (global
+   `0xfffffff00713e680` is NULL; caller strings `chip-id`/`IOPlatformExpert`).
+   Next: instantiate/populate the J8 platform object. Evidence:
+   `research/post-vm-faults.md`,
+   `evidence/qemu-2026-11-18-lse-emulated-null-abort.png`.
 4. **Port the shim's own MMU to 4 KiB** (`mmu.c`; the kernel is entered with the
    MMU off, so this is the shim's identity map only), then add the J8 shim
    pieces: GICv2, SDCC/eMMC kernel loading, display and the J8 ADT.

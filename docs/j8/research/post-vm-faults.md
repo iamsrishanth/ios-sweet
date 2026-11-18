@@ -51,6 +51,22 @@ platform/driver object pointer is still NULL, which is expected at this stage
 
 Screenshot: `docs/j8/evidence/qemu-2026-11-18-data-abort-maxcpu.png`.
 
+## LSE emulation (0099) result
+
+Patch 0099 adds J8-only LSE emulation to `handle_uncategorized`. With it the A53
+no longer traps on `ldadd`: the kernel reaches the **same** `Kernel data abort`
+as `-cpu max` (`pc 0xfffffff0077f5f74`, ESR `0x96000005`, FAR `0x28`). The
+faulting sequence is:
+
+```
+ldr x22, [x9, #0x680]    ; global pointer at 0xfffffff00713e680 is NULL
+ldr x20, [x22, #0x28]    ; data abort at 0x28
+```
+
+The caller references the strings `chip-id` and `IOPlatformExpert`, so this is
+the **platform-expert path**, not an ISA problem. Next: instantiate/populate the
+J8 platform object (platform expert / ADT).
+
 ## Meaning
 
 - The 4 KiB non-large-memory kernel now executes deep into XNU VM and platform
