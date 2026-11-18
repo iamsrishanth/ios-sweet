@@ -28,7 +28,7 @@ evidence.
 | Partition map / storage type (eMMC, not UFS) | **hardware-verified** | live `/proc/partitions`, `/dev/block/by-name`, device tree |
 | Recovery path and rollback assets | **hardware-verified** *(historical Android use)* + documented | `INSTALL-RECOVERY.md` |
 | Page-size capability (`TGran16`) | **documented: no 16K** (unit confirmation failed) | Cortex-A53 r0p4 TRM `TGran16 = 0x0`; EL0 access is architecturally absent (SIGILL measured); the EL1 probe image was built and flashed but the **bootloader rejected it**, so no on-unit read exists |
-| XNU kernel built for J8 | **QEMU: VM init complete, platform fault** | CI run **44269840744**: `kernel.release.j8`, 11,940,088 bytes, SHA-256 `a0fa0e326dd8152969c69431bf5f0320ac6eb043c6555ee6f6ea75e12a3d0716`, plain ARM64; patches 0082-0099. VM init completes; LSE atomics are emulated so the A53 reaches the same `NULL+0x28` platform-expert fault as an LSE-capable CPU. No phone boot. |
+| XNU kernel built for J8 | **QEMU: VM init complete, platform fault** | CI run **44279342492**: `kernel.release.j8`, 11,943,104 bytes, SHA-256 `0d1f3ab46a8334472e6e55a36f5743d8e8ad6cabb20686e5949711155f3b227a`, plain ARM64; patches 0082-0100. VM init completes; LSE atomics are emulated; the platform expert is compiled in but not instantiated, so the same `NULL+0x28` fault remains. No phone boot. |
 | J8 shim (4 KiB granule MMU) | **researched** | `shim/mmu.c` is 16 KiB-only |
 | Anything booting on the J8 from this project | **QEMU only** | VM init complete; blocked by a NULL platform-expert object; nothing flashed since the rejected probe |
 
@@ -82,6 +82,7 @@ evidence.
 | 2026-11-18 08:21 UTC | J8 RELEASE, zone map capped at 2 GiB (run **44263886581**) | **`kmem_range_init` passes**: VM bootstrap done (86 maps), zone map/compressor/firehose configured; A53 then panics on `ldadd x8, x8, [x9]` (LSE) at pc `0xfffffff0071d0a54` | `evidence/qemu-2026-11-18-lse-undefined-a53.png` |
 | 2026-11-18 08:21 UTC | Same kernel on `-cpu max` (LSE capable) | boots past VM init; panic `Kernel data abort` at pc `0xfffffff0077f5f74`, ESR `0x96000005`, FAR `0x28` (`NULL+0x28`) | `evidence/qemu-2026-11-18-data-abort-maxcpu.png` |
 | 2026-11-18 09:00 UTC | LSE emulation for J8 (run **44269840744**) | **A53 boots past the LSE**: same `NULL+0x28` platform fault as `-cpu max`; faulting code loads the global at `0xfffffff00713e680` (NULL), caller strings `chip-id`/`IOPlatformExpert` | `evidence/qemu-2026-11-18-lse-emulated-null-abort.png` |
+| 2026-11-18 10:08 UTC | Platform expert enabled for J8 (run **44279342492**) | class and `xiaomi,sweet` match string are in the kernel, but the platform expert is still not instantiated: same `Kernel data abort` at `0xfffffff0077f5f74`. Needs `PE_state`/ADT or match diagnostics | `evidence/qemu-2026-11-18-platform-expert-still-null.png` |
 | - | Any J8 boot of XNU/iOS | not attempted: no GICv2 delivery, shim, device tree or drivers | - |
 
 ## 5. What this task implemented
@@ -131,14 +132,14 @@ device Apple recognises, and is out of scope for this port.
 2. **Done: J8 machine config and GICv2 path** — patches 0082-0087 compile and
    link (CI 44033283321). The GICv2 timer/SGI dispatch is compile-verified only;
    PPI 19 and the non-secure Group 1 view still need a runtime check.
-3. **QEMU J8: VM init complete; LSE emulated; NULL platform object next.**
+3. **QEMU J8: VM init complete; LSE emulated; platform expert still NULL.**
    Patch 0098 (2 GiB zone map) fixed `kmem_range_init`; patch 0099 emulates LSE
-   in the undefined handler, so the A53 now reaches the same `NULL+0x28` data
-   abort as `-cpu max`. The fault is in the platform-expert path (global
-   `0xfffffff00713e680` is NULL; caller strings `chip-id`/`IOPlatformExpert`).
-   Next: instantiate/populate the J8 platform object. Evidence:
-   `research/post-vm-faults.md`,
-   `evidence/qemu-2026-11-18-lse-emulated-null-abort.png`.
+   in the undefined handler. Patch 0100 compiles `SweetPlatformExpert` and its
+   `xiaomi,sweet` match entry, but no instance is created and the same
+   `NULL+0x28` fault remains. Next: instrument `PE_state.deviceTreeHead` /
+   `deviceTreeSize` and the `IOPlatformExpertDevice` match, or fix the ADT
+   pointer. Evidence: `research/post-vm-faults.md`,
+   `evidence/qemu-2026-11-18-platform-expert-still-null.png`.
 4. **Port the shim's own MMU to 4 KiB** (`mmu.c`; the kernel is entered with the
    MMU off, so this is the shim's identity map only), then add the J8 shim
    pieces: GICv2, SDCC/eMMC kernel loading, display and the J8 ADT.

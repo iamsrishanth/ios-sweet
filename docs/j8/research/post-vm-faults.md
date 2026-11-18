@@ -67,6 +67,23 @@ The caller references the strings `chip-id` and `IOPlatformExpert`, so this is
 the **platform-expert path**, not an ISA problem. Next: instantiate/populate the
 J8 platform object (platform expert / ADT).
 
+## Platform expert attempt (0100): compiled in, still not instantiated
+
+Patch 0100 compiles the existing `SweetPlatformExpert` (an
+`IODTPlatformExpert` subclass) for J8 and adds a J8 match entry for
+`'xiaomi,sweet'`. The RELEASE kernel built by run **44279342492** contains both
+`SweetPlatformExpert` and `xiaomi,sweet`, but the boot result is **unchanged**:
+the same `NULL+0x28` data abort at `pc 0xfffffff0077f5f74`.
+
+So the platform expert class is present, but no instance is matched/started
+(`gIOPlatformExpert` remains NULL). The likely causes are that the device-tree
+root nub is not created because `PE_state.deviceTreeHead` is unset/unparsed, or
+that the match provider/name differs from `xiaomi,sweet`.
+
+Next diagnostic: print `PE_state.deviceTreeHead`, `deviceTreeSize` and
+`PE_state.bootArgs` in the early platform init (J8 only), and the
+`IOPlatformExpert` match/provider path, then fix the ADT pointer or the match.
+
 ## Meaning
 
 - The 4 KiB non-large-memory kernel now executes deep into XNU VM and platform
