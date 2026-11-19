@@ -192,30 +192,32 @@ Next: inspect `CPU_EXCEPSTACK_TOP` / per-CPU exception stack placement, the
 for overlap. The platform expert match change is likely irrelevant until this
 layout issue is fixed.
 
-## Boot-stack / .data overlap (0107 follow-up)
+## Boot-stack / .data overlap: candidate, not confirmed
 
 The DEVELOPMENT kernel places the boot stacks in `__BOOTDATA`:
 
 ```
 _excepstack       0xfffffff007c64000  (__BOOTDATA)
 _excepstack_top   0xfffffff007c68000
-_excepstack_high_guard 0xfffffff007c68000
 EXCEPSTACK_SIZE   16384
 ```
 
-`arm_init.c` sets `BootCpuData.intstack_top = &intstack_top` and
-`excepstack_top = &excepstack_top`, and `start.s` loads SP_EL0/SP_EL1 from
-those fields. In the RELEASE J8 boot, the `.data` marker page is overwritten by
-an exception frame (`ESR 0x96000005`, `FAR 0x1a8`), i.e. **the boot stack
-region overlaps `.data`** in the RELEASE layout. The DEVELOPMENT layout is
-disjoint, so this is specific to the RELEASE J8 linker/segment placement.
+`arm_init.c` sets `BootCpuData.intstack_top`/`excepstack_top` from these, and
+`start.s` loads SP_EL0/SP_EL1 from the fields. The RELEASE link flags use
+`-segment_order ...,__DATA:__HIBDATA:__BOOTDATA`, i.e. `__BOOTDATA` **after**
+`__DATA`, and the RELEASE segments are `__DATA 0xfffffff00793c000+0xf8000`,
+`__BOOTDATA 0xfffffff007a34000+0x44000` — disjoint. So a direct stack/.data
+overlap is **not confirmed**.
 
-This explains the missing markers, the SP1 panic and likely much of the
-post-VM instability. Next: fix the J8 RELEASE layout so `__BOOTDATA`
-(stacks, page tables) is disjoint from `.data`, e.g. by checking the J8 linker
-script/segment vmsize and where `data.s` lands in RELEASE (intstack/excepstack
-symbols are stripped, so compare against the DEVELOPMENT layout or use a
-debugger).
+What is observed: the `.data` marker page is overwritten with `ESR 0x96000005`
+and `FAR 0x1a8`. Something writes exception state there (possibly a global
+panic-state structure overlapping the marker address, or a mis-mapped stack),
+but the RELEASE artifact is stripped (no `_excepstack`/marker symbols, no linker
+map), so the writer cannot be identified from the current artifacts.
+
+Next: generate a RELEASE linker map (e.g. add `-Wl,-map,<path>` to the link) or
+attach a debugger, then compare the marker, `intstack`/`excepstack` and panic
+state addresses. Until then the overlap remains a hypothesis, not a finding.
 
 ## Meaning
 
