@@ -247,6 +247,31 @@ boot-CPU statics and the per-CPU stack fields are correct; the writer of the
 Next: catch the write with a debugger/watchpoint, or instrument `sleh`/the
 panic path to record the first exception's SP/PC/FAR.
 
+## CI patch-application failure (root cause of the post-0100 confusion)
+
+The CI log for run **44521922053** shows:
+
+```
+Applying patch: 0101-j8-dt-debug.patch
+Skipping 0102-j8-dt-debug-late.patch (... malformed)
+Skipping 0103-j8-dt-panic.patch (... malformed)
+Skipping 0104-j8-platform-match-root-name.patch (... malformed)
+```
+
+So every kernel from 0101 onward still contained the **early `printf`** and the
+old `xiaomi,sweet` match. The gdb watchpoint confirms the fault chain:
+`_PE_init_platform` → `_printf` with the format
+`"J8: bootargs=%p dtP=%p len=%u head=%p size=%u\n"`, faulting at `FAR 0x150`
+because the console is not initialized. That fault produces the
+“Synchronous exception taken while SP1 selected” panic and the black screen.
+The `D22AP` match never reached the kernel; the platform-expert conclusions
+after 0100 were based on a kernel that still had the diagnostic print.
+
+Fix: delete diagnostic patches 0101-0107 and add a single
+`KernelConfigTables.cpp` hunk (`IONameMatch = 'D22AP'`) as
+`0101-j8-platform-match-d22ap.patch`. The build then has no early print and the
+correct match.
+
 ## Meaning
 
 - The 4 KiB non-large-memory kernel now executes deep into XNU VM and platform
