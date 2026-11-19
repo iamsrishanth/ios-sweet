@@ -65,10 +65,16 @@ State at end of session:
   `-cpu max` at `NULL+0x28` (`pc 0xfffffff0077f5f74`, ESR `0x96000005`): the
   global at `0xfffffff00713e680` is NULL in the platform-expert path (caller
   strings `chip-id`/`IOPlatformExpert`). Patch 0100 compiles
-  `SweetPlatformExpert` and its `xiaomi,sweet` match into the kernel, but no
-  instance is created and the fault is unchanged. Next: instrument
-  `PE_state.deviceTreeHead`/`deviceTreeSize` and the `IOPlatformExpertDevice`
-  match, or fix the ADT pointer. Evidence:
+  `SweetPlatformExpert` (0100). The match never fired: `IODeviceTreeAlloc`
+  renames the root entry to the first compatible string (`D22AP`), fixed by
+  0104; the old `NULL+0x28` query then disappeared. Stage markers (0105-0107)
+  in `StartIOKitMatching`, `startIOServiceMatching` and the platform expert
+  never appear, and the marker `.data` page is overwritten by an exception
+  frame (`ESR 0x96000005`, `FAR 0x1a8`). The panic string is "Synchronous
+  exception taken while SP1 selected". The boot stacks (`intstack`/
+  `excepstack`, 16 KiB) are in `__BOOTDATA` in DEVELOPMENT at
+  `0xfffffff007c64000`, but in RELEASE J8 they overlap `.data`. That layout
+  bug, not the platform match, is the current blocker. Evidence:
   `docs/j8/evidence/qemu-2026-11-18-platform-expert-still-null.png`; analysis
   `docs/j8/research/post-vm-faults.md`. The large-memory L0 path (0089/0091)
   faulted at `_arm_init` despite correct TCR/TTBR1/L0 entries and is not the
@@ -86,12 +92,12 @@ State at end of session:
   sha256 `ee766f98ea5682f0602c23aa3f3e1ce770551f904a437a9a2bb1d61b8d3c9a82`.
 
 Next actions, in order: (1) **do not re-flash the probe as built** (the
-bootloader rejected it); (2) diagnose why the J8 platform expert is not
-instantiated even though `SweetPlatformExpert` and its `xiaomi,sweet` match are
-in the kernel: instrument `PE_state.deviceTreeHead`/`deviceTreeSize` and the
-`IOPlatformExpertDevice` match, or fix the ADT pointer; this must resolve the
-`NULL+0x28` data abort (`pc 0xfffffff0077f5f74`, ESR `0x96000005`) before QEMU
-can reach serial/timer output; (3) add PSCI CPU_ON for the secondary cores
+bootloader rejected it); (2) fix the J8 RELEASE layout: the boot stacks (`intstack`/`excepstack`,
+16 KiB, `__BOOTDATA`) overlap `.data` in RELEASE (markers overwritten by an
+exception frame; panic "Synchronous exception taken while SP1 selected");
+compare with the DEVELOPMENT layout (`_excepstack` `0xfffffff007c64000`) and
+correct the linker/segment placement; this layout bug likely underlies the
+platform-expert/matching failures; (3) add PSCI CPU_ON for the secondary cores
 (still SWEET-only); (4) port the shim's own MMU to 4 KiB and add GICv2,
 SDCC/eMMC loading, display and the J8 ADT; (5) SDCC/eMMC driver; (6) display,
 touch, keys, then GPU, Wi-Fi/BT, modem/audio, App Store. Details and gates in
