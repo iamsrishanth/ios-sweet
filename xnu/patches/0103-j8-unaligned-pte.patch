@@ -1,0 +1,23 @@
+diff --git a/osfmk/arm/pmap/pmap.c b/osfmk/arm/pmap/pmap.c
+--- a/osfmk/arm/pmap/pmap.c
++++ b/osfmk/arm/pmap/pmap.c
+@@ -619,6 +619,19 @@
+ 	__unreachable_ok_push
+ 	if (TEST_PAGE_RATIO_4) {
++#if defined(ARM64_BOARD_CONFIG_J8)
++		if (((uintptr_t)ptep) & 0x1f) {
++			/*
++			 * J8: 16K VM pages on a 4K hardware granule, but some
++			 * mappings (the shared region) start at an 8K-aligned
++			 * address. Map the single 4K PTE instead of panicking;
++			 * adjacent PTEs are filled by their own pmap_enter calls.
++			 */
++			*ptep = pte;
++			__unreachable_ok_pop
++			return;
++		}
++#endif
+ 		if (((uintptr_t)ptep) & 0x1f) {
+ 			panic("%s: PTE write is unaligned, ptep=%p, pte=%p",
+ 			    __func__, ptep, (void*)pte);
+ 		}
