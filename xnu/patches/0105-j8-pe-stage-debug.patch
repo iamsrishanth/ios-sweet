@@ -1,0 +1,62 @@
+diff --git a/iokit/Kernel/arm/SweetPlatformExpert.cpp b/iokit/Kernel/arm/SweetPlatformExpert.cpp
+index 7a9b34d..141f59f 100644
+--- a/iokit/Kernel/arm/SweetPlatformExpert.cpp
++++ b/iokit/Kernel/arm/SweetPlatformExpert.cpp
+@@ -10,6 +10,16 @@
+ #include <IOKit/IODeviceTreeSupport.h>
+ #include <IOKit/IOLib.h>
+ 
++#if defined(ARM64_BOARD_CONFIG_J8)
++static volatile uint64_t j8_pe_dbg[4];
++#define J8_PE_STAGE(s) do { \
++	j8_pe_dbg[0] = 0x4a38504544424731ULL; \
++	j8_pe_dbg[1] = (uint64_t)(s); \
++} while (0)
++#else
++#define J8_PE_STAGE(s) do { } while (0)
++#endif
++
+ class SweetPlatformExpert : public IODTPlatformExpert {
+ 	OSDeclareDefaultStructors(SweetPlatformExpert);
+ 
+@@ -25,11 +35,15 @@ OSDefineMetaClassAndStructors(SweetPlatformExpert, IODTPlatformExpert);
+ bool
+ SweetPlatformExpert::start(IOService *provider)
+ {
++	J8_PE_STAGE(1);
+ 	IOLog("SWEET: starting device-tree platform expert\n");
+ 	if (!IODTPlatformExpert::start(provider)) {
++		J8_PE_STAGE(0xbad);
+ 		return false;
+ 	}
++	J8_PE_STAGE(2);
+ 	registerService();
++	J8_PE_STAGE(3);
+ 	IOLog("SWEET: platform expert registered\n");
+ 	return true;
+ }
+@@ -54,12 +68,15 @@ SweetPlatformExpert::processTopLevel(IORegistryEntry *root)
+ 	 * SWEET has no NVRAM controller; publish real CPU/device nodes without
+ 	 * inventing one. createNubs adds the topology's logical CPU/cluster IDs.
+ 	 */
++	J8_PE_STAGE(4);
+ 	IORegistryEntry *cpus = root->childFromPath("cpus", gIODTPlane);
+ 	if (cpus != NULL) {
+ 		createNubs(this, IODTFindMatchingEntries(cpus, kIODTExclusive, NULL));
+ 		cpus->release();
+ 	}
++	J8_PE_STAGE(5);
+ 	createNubs(this, IODTFindMatchingEntries(root, kIODTExclusive, excludeList()));
++	J8_PE_STAGE(6);
+ 
+ 	/*
+ 	 * No AppleARMIO driver publishes the /arm-io children: do it here so
+@@ -72,6 +89,8 @@ SweetPlatformExpert::processTopLevel(IORegistryEntry *root)
+ 		createNubs(this, IODTFindMatchingEntries(armio, kIODTExclusive, "('gic')"));
+ 		armio->release();
+ 	}
++	J8_PE_STAGE(7);
++	J8_PE_STAGE(8);
+ }
+ 
+ /*
