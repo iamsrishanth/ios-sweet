@@ -127,6 +127,22 @@ Next: instrument `SweetPlatformExpert::start`/`processTopLevel` through a
 non-console channel (a fixed memory store read via QEMU), or simplify `start`
 to isolate the failing call.
 
+## Stage markers (0105): start not reached
+
+Patch 0105 writes a magic/stage pair from `SweetPlatformExpert::start` and
+`processTopLevel` into a static array. After booting the panic state and
+scanning the whole loaded image (0xb0000000 + 0x1c00000) with QEMU
+`pmemsave`, **no marker was found**. So `SweetPlatformExpert::start` is never
+entered: matching fails (or panics) earlier than the old `chip-id` query.
+
+This also means the `D22AP` match change did not instantiate the class; it
+removed the earlier NULL query only because the kernel fails at a still earlier
+step in `StartIOKitMatching`.
+
+Next: put stage markers in `StartIOKitMatching` and
+`IOPlatformExpertDevice::startIOServiceMatching` (workLoop acquisition and
+registerService) to find the exact earlier failure.
+
 ## Meaning
 
 - The 4 KiB non-large-memory kernel now executes deep into XNU VM and platform
