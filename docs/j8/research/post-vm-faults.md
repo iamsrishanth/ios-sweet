@@ -174,6 +174,24 @@ itself be the faulting access, or the platform path faults under SP1.
 Next: analyse the SP1 exception (gdb/stack) or move the markers to a definitely
 mapped page and retest.
 
+## Marker overwrite / exception-stack overlap (0107)
+
+Patch 0107 moves the marker arrays into file-backed `.data` with an initial
+magic. The magic is present in the kernel and boot image at PA
+`0xb19752a0`/`0xb19756f8`, but **absent from guest RAM** after boot. The same
+physical words instead contain `0x96000005` and `0x1a8` — the exception
+`ESR`/`FAR` from the SP1 panic.
+
+So the `.data` page holding the markers is **reused as the exception stack**
+at runtime. This is a stack/layout overlap, not a platform-expert match failure,
+and it explains both the missing markers and the “Synchronous exception taken
+while SP1 selected” panic.
+
+Next: inspect `CPU_EXCEPSTACK_TOP` / per-CPU exception stack placement, the
+`__percpu`/BSS segment sizing in `mkpayload`, and the non-large pmap mappings
+for overlap. The platform expert match change is likely irrelevant until this
+layout issue is fixed.
+
 ## Meaning
 
 - The 4 KiB non-large-memory kernel now executes deep into XNU VM and platform
