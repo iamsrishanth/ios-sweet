@@ -125,8 +125,13 @@ def build(seed=None, qemu=False, highmem=False, gicv2=False):
         # files), so e.g. DataMigration never records LastSystemVersion and
         # migrates on every boot. Synthetic ECID (not the phone's); chip-id
         # of the A11 that the iPhone X userland expects.
-        ('unique-chip-id', struct.pack('<Q', SWEET_ECID)),
-        ('chip-id', u32(0x8015)),
+        # g_crypto_funcs is absent in this build, so generatePlatformUUID must
+        # not take the SHA1 path. Omit the chip-id properties for QEMU; the real
+        # device ADT keeps them (corecrypto will be needed there).
+        *([] if qemu else [
+            ('unique-chip-id', struct.pack('<Q', SWEET_ECID)),
+            ('chip-id', u32(0x8015)),
+        ]),
         # Security status as on a dev-fused, undemoted board (tuple 0,0,1,1):
         # MobileGestalt reads these from /chosen, and mobileactivationd's
         # DeviceType then takes its native "Hactivation" branch (state

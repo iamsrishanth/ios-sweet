@@ -1,0 +1,68 @@
+diff --git a/osfmk/prng/prng_random.c b/osfmk/prng/prng_random.c
+index c53d45d..0f2c7ee 100644
+--- a/osfmk/prng/prng_random.c
++++ b/osfmk/prng/prng_random.c
+@@ -145,9 +145,9 @@ static struct {
+ 		     .strictFIPS = 0,
+ 	     }};
+ 
+-#if defined(SWEET)
++#if defined(SWEET) || defined(ARM64_BOARD_CONFIG_J8)
+ /*
+- * The corecrypto kext normally installs the kernel PRNG. SWEET has no such
++ * The corecrypto kext normally installs the kernel PRNG. SWEET/J8 has no such
+  * kext: use the built-in HMAC-SHA256 DRBG, just as early_random does. A
+  * single mutex serializes generation and reseeding across all CPUs. This
+  * favors a small, auditable bring-up implementation over per-CPU scaling.
+@@ -473,7 +473,7 @@ int
+ write_random(void * buffer, u_int numbytes)
+ {
+ 	uint8_t seed[SHA256_DIGEST_LENGTH];
+-#if defined(SWEET)
++#if defined(SWEET) || defined(ARM64_BOARD_CONFIG_J8)
+ 	/* Hash without depending on the absent corecrypto kext's dispatch table. */
+ 	const struct ccdigest_info *di = &ccsha256_ltc_di;
+ 	ccdigest_di_decl(di, ctx);
+diff --git a/osfmk/vm/vm_kern.c b/osfmk/vm/vm_kern.c
+index 719a18d..c8190ff 100644
+--- a/osfmk/vm/vm_kern.c
++++ b/osfmk/vm/vm_kern.c
+@@ -2440,9 +2440,9 @@ kmem_sizeclass_init(void)
+ 	}
+ }
+ 
+-#if defined(SWEET)
++#if defined(SWEET) || defined(ARM64_BOARD_CONFIG_J8)
+ /*
+- * No corecrypto kext is loaded on SWEET yet. The kmem RNG contract permits
++ * No corecrypto kext is loaded on SWEET/J8 yet. The kmem RNG contract permits
+  * a non-cryptographic generator and requires lock-free generation. Keep
+  * allocator RNG state per CPU/sizeclass; seed it from XNU's built-in early
+  * HMAC-SHA256 DRBG during single-CPU initialization.
+@@ -2486,7 +2486,7 @@ __startup_func
+ static void
+ kmem_crypto_init(void)
+ {
+-#if defined(SWEET)
++#if defined(SWEET) || defined(ARM64_BOARD_CONFIG_J8)
+ 	vm_size_t ctx_size = sizeof(struct sweet_kmem_rng);
+ #else
+ 	vm_size_t ctx_size = crypto_random_kmem_ctx_size();
+@@ -2497,7 +2497,7 @@ kmem_crypto_init(void)
+ 
+ 		ks->ks_rng_ctx = zalloc_percpu_permanent(ctx_size, ZALIGN_PTR);
+ 		zpercpu_foreach(ctx, ks->ks_rng_ctx) {
+-#if defined(SWEET)
++#if defined(SWEET) || defined(ARM64_BOARD_CONFIG_J8)
+ 			((struct sweet_kmem_rng *)ctx)->state = early_random();
+ #else
+ 			crypto_random_kmem_init(ctx);
+@@ -2766,7 +2766,7 @@ kmem_get_next_slot(
+ 		 */
+ 		slot_idx = kmem_get_random16((uint16_t)num_slots - 1);
+ 	} else {
+-#if defined(SWEET)
++#if defined(SWEET) || defined(ARM64_BOARD_CONFIG_J8)
+ 		slot_idx = sweet_kmem_uniform(zpercpu_get(sizeclass.ks_rng_ctx), num_slots);
+ #else
+ 		crypto_random_uniform(zpercpu_get(sizeclass.ks_rng_ctx), num_slots,
