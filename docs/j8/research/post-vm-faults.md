@@ -158,6 +158,22 @@ This is a diagnostic wall without a debugger: the next step is QEMU's gdbstub
 with a gdb that can target aarch64 (not installed on this Windows host), or a
 minimal experiment that skips the failing IOKit step.
 
+## SP1 panic clue (0106)
+
+Stopping at the panic loop and reading the registers shows `X19` pointing to:
+
+```
+Synchronous exception taken while SP1 selected
+```
+
+So the kernel took a synchronous exception with **SP1 selected**, and panics in
+that handler; the console is not available, so the screen stays black. This
+also explains why the BSS stage markers never appear: the first marker write may
+itself be the faulting access, or the platform path faults under SP1.
+
+Next: analyse the SP1 exception (gdb/stack) or move the markers to a definitely
+mapped page and retest.
+
 ## Meaning
 
 - The 4 KiB non-large-memory kernel now executes deep into XNU VM and platform
