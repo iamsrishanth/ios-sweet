@@ -336,6 +336,20 @@ breakpoints confirm `iokitDaemonAvailable()` returns 1, `getServiceRoot()` is
 called, and the vtable `adjustBusy` call is reached, but StartIOKitMatching
 never returns. Patch 0105 compiles that block out for J8.
 
+## adjustBusy moved the block; OSMetaClass NULL (0105/0106)
+
+Skipping the iokitd `adjustBusy(1)` (0105) lets StartIOKitMatching return and
+the boot reaches 28 threads, but the IOKit config thread then panics:
+
+```
+OSMetaClass::applyToInstances + 0x2c, pc=0xfffffff0077b232c, FAR 0
+_IOConfigThread::main -> IOService::doServiceMatch -> IOService::_adjustBusy
+```
+
+Patch 0106 guards a NULL `set`/`reserved` in applyToInstances, but the same
+panic remains (`pc 0x...7b232c`, FAR 0). The NULL is therefore another pointer
+inside the function; disassemble the member function to find it.
+
 ## Meaning
 
 - The 4 KiB non-large-memory kernel now executes deep into XNU VM and platform
