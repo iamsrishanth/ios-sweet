@@ -192,6 +192,31 @@ Next: inspect `CPU_EXCEPSTACK_TOP` / per-CPU exception stack placement, the
 for overlap. The platform expert match change is likely irrelevant until this
 layout issue is fixed.
 
+## Boot-stack / .data overlap (0107 follow-up)
+
+The DEVELOPMENT kernel places the boot stacks in `__BOOTDATA`:
+
+```
+_excepstack       0xfffffff007c64000  (__BOOTDATA)
+_excepstack_top   0xfffffff007c68000
+_excepstack_high_guard 0xfffffff007c68000
+EXCEPSTACK_SIZE   16384
+```
+
+`arm_init.c` sets `BootCpuData.intstack_top = &intstack_top` and
+`excepstack_top = &excepstack_top`, and `start.s` loads SP_EL0/SP_EL1 from
+those fields. In the RELEASE J8 boot, the `.data` marker page is overwritten by
+an exception frame (`ESR 0x96000005`, `FAR 0x1a8`), i.e. **the boot stack
+region overlaps `.data`** in the RELEASE layout. The DEVELOPMENT layout is
+disjoint, so this is specific to the RELEASE J8 linker/segment placement.
+
+This explains the missing markers, the SP1 panic and likely much of the
+post-VM instability. Next: fix the J8 RELEASE layout so `__BOOTDATA`
+(stacks, page tables) is disjoint from `.data`, e.g. by checking the J8 linker
+script/segment vmsize and where `data.s` lands in RELEASE (intstack/excepstack
+symbols are stripped, so compare against the DEVELOPMENT layout or use a
+debugger).
+
 ## Meaning
 
 - The 4 KiB non-large-memory kernel now executes deep into XNU VM and platform
