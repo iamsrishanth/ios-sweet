@@ -238,6 +238,15 @@ Next: read `BootCpuData` at runtime (its address is in `__DATA,__percpu`,
 `0xfffffff007978000`+) and check the stack fields after `arm_init`, or
 instrument the exception-entry stack switch to record the faulting SP/PC.
 
+Runtime check at 0.35 s: `BootCpuData` is the `_percpu_slot_cpu_data` at
+`0xfffffff00797a720` (0x4e0 bytes). It holds `0xfffffff007a67df0` at +0x1a8 and
++0x288, i.e. valid stack pointers inside the `__BOOTDATA` intstack. So both the
+boot-CPU statics and the per-CPU stack fields are correct; the writer of the
+`.data` frame is still unidentified.
+
+Next: catch the write with a debugger/watchpoint, or instrument `sleh`/the
+panic path to record the first exception's SP/PC/FAR.
+
 ## Meaning
 
 - The 4 KiB non-large-memory kernel now executes deep into XNU VM and platform

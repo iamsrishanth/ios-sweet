@@ -100,10 +100,11 @@ Next actions, in order: (1) **do not re-flash the probe as built** (the
 bootloader rejected it); (2) find the boot CPU's initial stack pointer (`start_first_cpu`/reset handler)
 and check whether `BootCpuData.intstack_top`/`excepstack_top` are valid before
 `arm_init`; `start_first_cpu` uses the static `excepstack_top`/`intstack_top`
-symbols (`0xfffffff007a70000`/`0xfffffff007a68000`, disjoint from `.data`), so
-the `.data` frame must come from the later per-CPU stack switch
-(`BootCpuData`/`sleh`) or an offset mismatch; read `BootCpuData` at runtime or
-instrument the exception-entry stack switch; (3) add PSCI CPU_ON for the secondary cores
+symbols (`0xfffffff007a70000`/`0xfffffff007a68000`, disjoint from `.data`), and
+a runtime read of `BootCpuData` (`0xfffffff00797a720`) shows valid stack
+pointers (`0xfffffff007a67df0` at +0x1a8/+0x288). The `.data` frame writer is
+still unidentified: catch it with a watchpoint/debugger or instrument
+`sleh`/panic to record the first exception's SP/PC/FAR; (3) add PSCI CPU_ON for the secondary cores
 (still SWEET-only); (4) port the shim's own MMU to 4 KiB and add GICv2,
 SDCC/eMMC loading, display and the J8 ADT; (5) SDCC/eMMC driver; (6) display,
 touch, keys, then GPU, Wi-Fi/BT, modem/audio, App Store. Details and gates in
