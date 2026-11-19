@@ -143,6 +143,21 @@ Next: put stage markers in `StartIOKitMatching` and
 `IOPlatformExpertDevice::startIOServiceMatching` (workLoop acquisition and
 registerService) to find the exact earlier failure.
 
+## IOKit stage markers (0106): still no marker
+
+Patch 0106 records stages in `StartIOKitMatching`,
+`IOPlatformExpertDevice::startIOServiceMatching`, workLoop acquisition and
+`registerService`. After booting to the panic state and scanning the loaded
+image, **neither** the IOKit magic nor the earlier PE magic is present. So the
+kernel dies before `StartIOKitMatching` (or the BSS marker writes themselves
+fault). Together with 0105 this means the `D22AP` match change removed the old
+`chip-id` query, but the failure is earlier in IOKit setup, not in the platform
+expert class.
+
+This is a diagnostic wall without a debugger: the next step is QEMU's gdbstub
+with a gdb that can target aarch64 (not installed on this Windows host), or a
+minimal experiment that skips the failing IOKit step.
+
 ## Meaning
 
 - The 4 KiB non-large-memory kernel now executes deep into XNU VM and platform
