@@ -315,6 +315,18 @@ the remaining stall is in IOKit matching/driver probing after registration.
 Next: find the stall with gdb (PC/stack after `platform expert registered`) or
 add IOLog stages in `StartIOKitMatching`/`processTopLevel`.
 
+## After registration: matching runs, bsd_init not reached
+
+Sampling the CPU at 3 s and 6 s shows the same PC in
+`_processor_idle` → `_ml_get_timebase` (idle). gdb breakpoints show the boot
+thread reaches `kernel_bootstrap` and `StartIOKitMatching`, and
+`IOService::registerService`/`startMatching` run for multiple services. It does
+**not** reach `bsd_init` within 20 s; after the matching calls the boot thread
+blocks and the idle thread runs.
+
+Next: trace the matching workloop/driver starts to find the wait (likely a
+service waiting on an interrupt/timer), then reach BSD init/userland.
+
 ## Meaning
 
 - The 4 KiB non-large-memory kernel now executes deep into XNU VM and platform
