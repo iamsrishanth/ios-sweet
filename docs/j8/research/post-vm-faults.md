@@ -327,6 +327,15 @@ blocks and the idle thread runs.
 Next: trace the matching workloop/driver starts to find the wait (likely a
 service waiting on an interrupt/timer), then reach BSD init/userland.
 
+## adjustBusy(1) block (0105)
+
+After the platform expert registers, `startIOServiceMatching` returns true, but
+the boot thread blocks in `IOService::getServiceRoot()->adjustBusy(1)` — the
+IOKit-daemon busy count waits for a userland kextd that does not exist. gdb
+breakpoints confirm `iokitDaemonAvailable()` returns 1, `getServiceRoot()` is
+called, and the vtable `adjustBusy` call is reached, but StartIOKitMatching
+never returns. Patch 0105 compiles that block out for J8.
+
 ## Meaning
 
 - The 4 KiB non-large-memory kernel now executes deep into XNU VM and platform
