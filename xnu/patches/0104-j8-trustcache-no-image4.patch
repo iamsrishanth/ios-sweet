@@ -1,0 +1,16 @@
+diff --git a/bsd/kern/kern_trustcache.c b/bsd/kern/kern_trustcache.c
+index 9066367..957fc16 100644
+--- a/bsd/kern/kern_trustcache.c
++++ b/bsd/kern/kern_trustcache.c
+@@ -248,9 +248,9 @@ trust_cache_runtime_init(void)
+ 	allow_legacy_caches = true;
+ #endif
+ 
+-#if defined(SWEET)
++#if defined(SWEET) || defined(ARM64_BOARD_CONFIG_J8)
+ 	/*
+-	 * Standalone SWEET bring-up has no AppleImage4/AMFI kexts. Represent
++	 * Standalone SWEET/J8 bring-up has no AppleImage4/AMFI kexts. Represent
+ 	 * the missing service explicitly: no caches can be loaded or matched.
+ 	 * Keep a NULL runtime through lockdown rather than a partially
+ 	 * initialized runtime that would later dereference absent callbacks.
