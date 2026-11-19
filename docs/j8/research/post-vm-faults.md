@@ -220,6 +220,24 @@ Next: find the boot CPU's initial SP (`start_first_cpu`/reset handler) and check
 whether `BootCpuData.intstack_top`/`excepstack_top` are valid before `arm_init`;
 the frame destination suggests a stale/garbage stack pointer into `.data`.
 
+## Boot CPU stack setup
+
+`start_first_cpu` sets the stacks directly from the static symbols, converting
+to KVA with `virt_base - phys_base`:
+
+- SP_EL1 = `&excepstack_top` → `0xfffffff007a70000`
+- SP_EL0 = `&intstack_top` → `0xfffffff007a68000`
+
+Both are in `__BOOTDATA`, disjoint from `.data` and from the markers. So the
+early exception frame that lands on the marker page is **not** written by the
+boot CPU's initial stacks; the next suspect is the later per-CPU stack switch
+(`BootCpuData.intstack_top`/`excepstack_top` used by `start_cpu`/`sleh`) or an
+offset/pointer mismatch.
+
+Next: read `BootCpuData` at runtime (its address is in `__DATA,__percpu`,
+`0xfffffff007978000`+) and check the stack fields after `arm_init`, or
+instrument the exception-entry stack switch to record the faulting SP/PC.
+
 ## Meaning
 
 - The 4 KiB non-large-memory kernel now executes deep into XNU VM and platform
