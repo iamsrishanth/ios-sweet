@@ -73,8 +73,13 @@ State at end of session:
   exception taken while SP1 selected" panic, the black screen and the marker
   overwrite (the panic path itself writes into `.data`). The `D22AP` match never
   reached the kernel. Fix: diagnostic patches 0101-0107 removed; a single clean
-  `IONameMatch='D22AP'` hunk is patch 0101. Next: rebuild/test that clean
-  series. Evidence:
+  `IONameMatch='D22AP'` hunk is patch 0101. The clean kernel boots with the
+  console and the match applied; real faults were `generatePlatformUUID` ->
+  `g_crypto_funcs` NULL (skipped by omitting chip-id from the QEMU ADT) and
+  `crypto_random_kmem_ctx_size` -> `g_crypto_funcs` NULL. Patch 0102 compiles
+  the SWEET crypto fallbacks for J8; the kernel now initializes zones, threads
+  and the panic log, then panics in `write_pte_fast` (unaligned PTE, pmap.c:623).
+  Next: fix that 16K-page/4K-granule pmap alignment. Evidence:
   `docs/j8/evidence/qemu-2026-11-18-platform-expert-still-null.png`; analysis
   `docs/j8/research/post-vm-faults.md`. The large-memory L0 path (0089/0091)
   faulted at `_arm_init` despite correct TCR/TTBR1/L0 entries and is not the
@@ -92,14 +97,11 @@ State at end of session:
   sha256 `ee766f98ea5682f0602c23aa3f3e1ce770551f904a437a9a2bb1d61b8d3c9a82`.
 
 Next actions, in order: (1) **do not re-flash the probe as built** (the
-bootloader rejected it); (2) find the boot CPU's initial stack pointer (`start_first_cpu`/reset handler)
-and check whether `BootCpuData.intstack_top`/`excepstack_top` are valid before
-`arm_init`; `start_first_cpu` uses the static `excepstack_top`/`intstack_top`
-symbols (`0xfffffff007a70000`/`0xfffffff007a68000`, disjoint from `.data`), and
-a runtime read of `BootCpuData` (`0xfffffff00797a720`) shows valid stack
-pointers (`0xfffffff007a67df0` at +0x1a8/+0x288). The `.data` frame writer is
-still unidentified: catch it with a watchpoint/debugger or instrument
-`sleh`/panic to record the first exception's SP/PC/FAR; (3) add PSCI CPU_ON for the secondary cores
+bootloader rejected it); (2) fix `write_pte_fast`'s 32-byte alignment
+requirement for 16K pages on the 4K granule: the caller supplies a
+16-byte-aligned ptep (`ptep=0xfffffff025207290`; `TEST_PAGE_RATIO_4` at
+pmap.c:623); find that mapping path and correct the address/usage, then continue
+past pmap into IOKit matching; (3) add PSCI CPU_ON for the secondary cores
 (still SWEET-only); (4) port the shim's own MMU to 4 KiB and add GICv2,
 SDCC/eMMC loading, display and the J8 ADT; (5) SDCC/eMMC driver; (6) display,
 touch, keys, then GPU, Wi-Fi/BT, modem/audio, App Store. Details and gates in

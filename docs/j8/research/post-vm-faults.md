@@ -272,6 +272,32 @@ Fix: delete diagnostic patches 0101-0107 and add a single
 `0101-j8-platform-match-d22ap.patch`. The build then has no early print and the
 correct match.
 
+## Clean kernel, crypto fallbacks, pmap fault (2026-11-19)
+
+After removing the skipped diagnostics and applying the real `D22AP` match, the
+console works. The first real fault was `generatePlatformUUID` calling
+`SHA1_*` → `g_crypto_funcs` NULL (FAR 0x28) when `/chosen` has chip-id. Omitting
+`unique-chip-id`/`chip-id` from the QEMU ADT skips that path, and the next fault
+was `crypto_random_kmem_ctx_size` → `g_crypto_funcs` NULL (FAR 0x150) in
+`kmem_crypto_init`. Patch 0102 compiles the SWEET `sweet_kmem_rng` and
+`prng_random` fallbacks for J8.
+
+With those fallbacks (run **44575684242**, `012342908698006a69d18334c81a4edf620c7aa73d94c8140f01d9345a5d6ca5`),
+the kernel now initializes zones, threads (13), the panic log and boot args, then
+panics in `write_pte_fast`:
+
+```
+panic(cpu 0 caller 0xfffffff007328e4c): write_pte_fast: PTE write is unaligned,
+ptep=0xfffffff025207290, pte=0x4200000b2400ec3 @pmap.c:623
+```
+
+`write_pte_fast` requires 32-byte alignment when `TEST_PAGE_RATIO_4` (16K pages
+on a 4K granule); the caller supplies a 16-byte-aligned PTE pointer. This is a
+16K-page/4K-granule pmap alignment bug, not a crypto/platform issue.
+
+Next: find the mapping path that calls `write_pte_fast` with a non-16K-aligned
+address (ptep index 0x52, not a multiple of 4) and fix the alignment/usage.
+
 ## Meaning
 
 - The 4 KiB non-large-memory kernel now executes deep into XNU VM and platform
