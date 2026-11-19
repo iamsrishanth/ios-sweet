@@ -65,21 +65,16 @@ State at end of session:
   `-cpu max` at `NULL+0x28` (`pc 0xfffffff0077f5f74`, ESR `0x96000005`): the
   global at `0xfffffff00713e680` is NULL in the platform-expert path (caller
   strings `chip-id`/`IOPlatformExpert`). Patch 0100 compiles
-  `SweetPlatformExpert` (0100). The match never fired: `IODeviceTreeAlloc`
-  renames the root entry to the first compatible string (`D22AP`), fixed by
-  0104; the old `NULL+0x28` query then disappeared. Stage markers (0105-0107)
-  in `StartIOKitMatching`, `startIOServiceMatching` and the platform expert
-  never appear, and the marker `.data` page is overwritten by an exception
-  frame (`ESR 0x96000005`, `FAR 0x1a8`). The panic string is "Synchronous
-  exception taken while SP1 selected". The boot stacks (`intstack`/
-  `excepstack`, 16 KiB) are in `__BOOTDATA` in DEVELOPMENT at
-  `0xfffffff007c64000`; the RELEASE link map (0108) shows `_intstack`
-  `0xfffffff007a64000` and `_excepstack` `0xfffffff007a6c000`, i.e. disjoint
-  from `.data` (`_g_j8_io_dbg` `0xfffffff0079752a0`). Overlap is refuted.
-  QEMU timing: markers intact at t=0, overwritten by t=0.4 s with
-  `0x96000005`/`0x1a8` (ESR/FAR), so an **early exception frame lands in
-  `.data`** before `arm_init`/console. Next: find the boot CPU's initial SP and
-  check `BootCpuData.intstack_top`/`excepstack_top` before `arm_init`. Evidence:
+  `SweetPlatformExpert` (0100). **Root cause of the later confusion:** the CI
+  log shows patches 0102-0104 were skipped as malformed, so every kernel still
+  had the 0101 early `printf` and the old `xiaomi,sweet` match. gdb shows
+  `_PE_init_platform` -> `_printf` with the `J8: bootargs` format faulting at
+  `FAR 0x150` before the console exists; that fault causes the "Synchronous
+  exception taken while SP1 selected" panic, the black screen and the marker
+  overwrite (the panic path itself writes into `.data`). The `D22AP` match never
+  reached the kernel. Fix: diagnostic patches 0101-0107 removed; a single clean
+  `IONameMatch='D22AP'` hunk is patch 0101. Next: rebuild/test that clean
+  series. Evidence:
   `docs/j8/evidence/qemu-2026-11-18-platform-expert-still-null.png`; analysis
   `docs/j8/research/post-vm-faults.md`. The large-memory L0 path (0089/0091)
   faulted at `_arm_init` despite correct TCR/TTBR1/L0 entries and is not the
