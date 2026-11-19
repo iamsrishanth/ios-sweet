@@ -1,0 +1,13 @@
+diff --git a/iokit/KernelConfigTables.cpp b/iokit/KernelConfigTables.cpp
+index 40eb3f8..4bab10b 100644
+--- a/iokit/KernelConfigTables.cpp
++++ b/iokit/KernelConfigTables.cpp
+@@ -38,7 +38,7 @@ const char * gIOKernelConfigTables =
+     "   {"
+     "     'IOClass'         = SweetPlatformExpert;"
+     "     'IOProviderClass' = IOPlatformExpertDevice;"
+-    "     'IONameMatch'     = 'xiaomi,sweet';"
++    "     'IONameMatch'     = 'D22AP';"
+     "     'IOProbeScore'    = 10000:32;"
+     "   },"
+ #endif
