@@ -1,0 +1,29 @@
+diff --git a/libkern/c++/OSMetaClass.cpp b/libkern/c++/OSMetaClass.cpp
+index 4ad2fc7..9b51ef3 100644
+--- a/libkern/c++/OSMetaClass.cpp
++++ b/libkern/c++/OSMetaClass.cpp
+@@ -1103,6 +1103,11 @@ OSMetaClass::applyToInstances(OSOrderedSet * set,
+         unsigned int    level;
+         bool            done;
+ 
++#if defined(ARM64_BOARD_CONFIG_J8)
++        if (set == NULL) {
++                return;
++        }
++#endif
+         maxDepth = sDeepestClass;
+         if (maxDepth > kLocalDepth) {
+                 nextIndex = IONewData(typeof(nextIndex[0]), maxDepth);
+@@ -1147,6 +1152,12 @@ OSMetaClass::applyToInstances(OSMetaClassInstanceApplierFunction applier,
+     void * context) const
+ {
+         IOLockLock(sInstancesLock);
++#if defined(ARM64_BOARD_CONFIG_J8)
++        if (reserved == NULL) {
++                IOLockUnlock(sInstancesLock);
++                return;
++        }
++#endif
+         if (reserved->instances) {
+                 applyToInstances(reserved->instances, applier, context);
+ 	}
