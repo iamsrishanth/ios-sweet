@@ -192,32 +192,33 @@ Next: inspect `CPU_EXCEPSTACK_TOP` / per-CPU exception stack placement, the
 for overlap. The platform expert match change is likely irrelevant until this
 layout issue is fixed.
 
-## Boot-stack / .data overlap: candidate, not confirmed
+## Link map and marker timing (0108)
 
-The DEVELOPMENT kernel places the boot stacks in `__BOOTDATA`:
+The RELEASE link map (patch 0108) gives exact addresses:
 
 ```
-_excepstack       0xfffffff007c64000  (__BOOTDATA)
-_excepstack_top   0xfffffff007c68000
-EXCEPSTACK_SIZE   16384
+_g_j8_io_dbg          0xfffffff0079752a0
+j8_pe_dbg             0xfffffff0079756f8
+_debugger_panic_str   0xfffffff00797b480
+_panic_info           0xfffffff0079f6888
+_intstack             0xfffffff007a64000
+_excepstack           0xfffffff007a6c000
+__DATA,__bss          0xfffffff0079f7000
+__DATA,__percpu       0xfffffff007978000 (above the markers)
 ```
 
-`arm_init.c` sets `BootCpuData.intstack_top`/`excepstack_top` from these, and
-`start.s` loads SP_EL0/SP_EL1 from the fields. The RELEASE link flags use
-`-segment_order ...,__DATA:__HIBDATA:__BOOTDATA`, i.e. `__BOOTDATA` **after**
-`__DATA`, and the RELEASE segments are `__DATA 0xfffffff00793c000+0xf8000`,
-`__BOOTDATA 0xfffffff007a34000+0x44000` — disjoint. So a direct stack/.data
-overlap is **not confirmed**.
+So the boot stacks are **disjoint** from `.data`; the overlap hypothesis is
+refuted.
 
-What is observed: the `.data` marker page is overwritten with `ESR 0x96000005`
-and `FAR 0x1a8`. Something writes exception state there (possibly a global
-panic-state structure overlapping the marker address, or a mis-mapped stack),
-but the RELEASE artifact is stripped (no `_excepstack`/marker symbols, no linker
-map), so the writer cannot be identified from the current artifacts.
+Timing with QEMU (`-S`, examine at t=0, 0.4 s, 1.4 s): at t=0 the markers hold
+their magics; by 0.4 s they are overwritten — `g_j8_io_dbg` → `0x0`/`0x75`,
+`j8_pe_dbg` → `0x96000005`/`0x1a8` (ESR/FAR). So an **early exception frame
+lands in `.data`** at the marker page, before `arm_init`/console, and the code
+markers are never written.
 
-Next: generate a RELEASE linker map (e.g. add `-Wl,-map,<path>` to the link) or
-attach a debugger, then compare the marker, `intstack`/`excepstack` and panic
-state addresses. Until then the overlap remains a hypothesis, not a finding.
+Next: find the boot CPU's initial SP (`start_first_cpu`/reset handler) and check
+whether `BootCpuData.intstack_top`/`excepstack_top` are valid before `arm_init`;
+the frame destination suggests a stale/garbage stack pointer into `.data`.
 
 ## Meaning
 

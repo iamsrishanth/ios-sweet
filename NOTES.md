@@ -73,11 +73,13 @@ State at end of session:
   frame (`ESR 0x96000005`, `FAR 0x1a8`). The panic string is "Synchronous
   exception taken while SP1 selected". The boot stacks (`intstack`/
   `excepstack`, 16 KiB) are in `__BOOTDATA` in DEVELOPMENT at
-  `0xfffffff007c64000`, and the RELEASE segment order puts `__BOOTDATA` after
-  `__DATA` (disjoint), so a stack/.data overlap is a **candidate, not
-  confirmed**. The RELEASE artifact is stripped (no marker/stack symbols, no
-  linker map); next: produce a RELEASE link map or use a debugger to identify
-  what writes `ESR 0x96000005`/`FAR 0x1a8` into the marker page. Evidence:
+  `0xfffffff007c64000`; the RELEASE link map (0108) shows `_intstack`
+  `0xfffffff007a64000` and `_excepstack` `0xfffffff007a6c000`, i.e. disjoint
+  from `.data` (`_g_j8_io_dbg` `0xfffffff0079752a0`). Overlap is refuted.
+  QEMU timing: markers intact at t=0, overwritten by t=0.4 s with
+  `0x96000005`/`0x1a8` (ESR/FAR), so an **early exception frame lands in
+  `.data`** before `arm_init`/console. Next: find the boot CPU's initial SP and
+  check `BootCpuData.intstack_top`/`excepstack_top` before `arm_init`. Evidence:
   `docs/j8/evidence/qemu-2026-11-18-platform-expert-still-null.png`; analysis
   `docs/j8/research/post-vm-faults.md`. The large-memory L0 path (0089/0091)
   faulted at `_arm_init` despite correct TCR/TTBR1/L0 entries and is not the
@@ -95,11 +97,11 @@ State at end of session:
   sha256 `ee766f98ea5682f0602c23aa3f3e1ce770551f904a437a9a2bb1d61b8d3c9a82`.
 
 Next actions, in order: (1) **do not re-flash the probe as built** (the
-bootloader rejected it); (2) identify what writes exception state (`ESR 0x96000005`/`FAR 0x1a8`) into
-the `.data` marker page: generate a RELEASE linker map (or attach a debugger)
-and compare marker, `intstack`/`excepstack` and panic-state addresses; the
-stack/.data overlap is a candidate, not confirmed (RELEASE segment order is
-disjoint, DEVELOPMENT stacks are in `__BOOTDATA`); (3) add PSCI CPU_ON for the secondary cores
+bootloader rejected it); (2) find the boot CPU's initial stack pointer (`start_first_cpu`/reset handler)
+and check whether `BootCpuData.intstack_top`/`excepstack_top` are valid before
+`arm_init`; an early exception frame lands in `.data`
+(`ESR 0x96000005`/`FAR 0x1a8`), so a stale/garbage SP points into `.data`;
+the RELEASE link map (0108) gives exact symbol addresses; (3) add PSCI CPU_ON for the secondary cores
 (still SWEET-only); (4) port the shim's own MMU to 4 KiB and add GICv2,
 SDCC/eMMC loading, display and the J8 ADT; (5) SDCC/eMMC driver; (6) display,
 touch, keys, then GPU, Wi-Fi/BT, modem/audio, App Store. Details and gates in
