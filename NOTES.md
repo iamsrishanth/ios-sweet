@@ -79,7 +79,7 @@ State at end of session:
   `crypto_random_kmem_ctx_size` -> `g_crypto_funcs` NULL. Patch 0102 compiles
   the SWEET crypto fallbacks for J8; the kernel now initializes zones, threads
   and the panic log, then panics in `write_pte_fast` (unaligned PTE, pmap.c:623).
-  Next: fix that 16K-page/4K-granule pmap alignment. Evidence:
+  Patch 0103 adds an unaligned-PTE fallback and 0104 the trustcache Image4 fallback; the kernel now reaches "SWEET: platform expert registered" with no panic, then stalls. Next: find the post-registration stall. Evidence:
   `docs/j8/evidence/qemu-2026-11-18-platform-expert-still-null.png`; analysis
   `docs/j8/research/post-vm-faults.md`. The large-memory L0 path (0089/0091)
   faulted at `_arm_init` despite correct TCR/TTBR1/L0 entries and is not the
@@ -97,11 +97,7 @@ State at end of session:
   sha256 `ee766f98ea5682f0602c23aa3f3e1ce770551f904a437a9a2bb1d61b8d3c9a82`.
 
 Next actions, in order: (1) **do not re-flash the probe as built** (the
-bootloader rejected it); (2) fix `write_pte_fast`'s 32-byte alignment
-requirement for 16K pages on the 4K granule: the caller supplies a
-16-byte-aligned ptep (`ptep=0xfffffff025207290`; `TEST_PAGE_RATIO_4` at
-pmap.c:623); find that mapping path and correct the address/usage, then continue
-past pmap into IOKit matching; (3) add PSCI CPU_ON for the secondary cores
+bootloader rejected it); (2) find the boot stall after "SWEET: platform expert registered" (gdb PC/stack or IOLog stages in StartIOKitMatching/processTopLevel); (3) add PSCI CPU_ON for the secondary cores
 (still SWEET-only); (4) port the shim's own MMU to 4 KiB and add GICv2,
 SDCC/eMMC loading, display and the J8 ADT; (5) SDCC/eMMC driver; (6) display,
 touch, keys, then GPU, Wi-Fi/BT, modem/audio, App Store. Details and gates in

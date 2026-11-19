@@ -298,6 +298,23 @@ on a 4K granule); the caller supplies a 16-byte-aligned PTE pointer. This is a
 Next: find the mapping path that calls `write_pte_fast` with a non-16K-aligned
 address (ptep index 0x52, not a multiple of 4) and fix the alignment/usage.
 
+## Platform expert registered (0104)
+
+With the trustcache Image4 fallback (0104), the J8 kernel boots to:
+
+```
+SWEET: trust caches unavailable (Image4/AMFI not installed)
+SWEET: starting device-tree platform expert
+SWEET: platform expert registered
+```
+
+There is **no panic**. The boot then stalls (screen unchanged, serial empty).
+This resolves the NULL platform-expert fault that blocked every earlier kernel;
+the remaining stall is in IOKit matching/driver probing after registration.
+
+Next: find the stall with gdb (PC/stack after `platform expert registered`) or
+add IOLog stages in `StartIOKitMatching`/`processTopLevel`.
+
 ## Meaning
 
 - The 4 KiB non-large-memory kernel now executes deep into XNU VM and platform
