@@ -358,6 +358,17 @@ show `vm_set_restrictions` and `kperf_init_early` are entered, but `bsd_init`
 is never reached — the boot thread blocks inside `kperf_init_early`.
 Patch 0108 compiles kperf early init out for J8 (build 44690942059).
 
+## BSD init stage trace (0108)
+
+With kperf early init skipped, bsd_init runs (BSD copyright, MAC framework,
+buffer headers) and the platform expert registers, but the boot idles.
+gdb breakpoints: `kauth_init` is reached; `domaininit`, `socketinit`,
+`bsdinit_task` and `vfs_mountroot` are **not**. The boot thread blocks at or
+just after `kauth_init`.
+
+Next: break at the `kauth_init` return address in bsd_init (`0x…613b0c`) to see
+whether kauth returns, then trace the next init call.
+
 ## Meaning
 
 - The 4 KiB non-large-memory kernel now executes deep into XNU VM and platform
