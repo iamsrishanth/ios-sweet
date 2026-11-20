@@ -1,0 +1,16 @@
+diff --git a/libkern/c++/OSMetaClass.cpp b/libkern/c++/OSMetaClass.cpp
+index 9b51ef3..17c73f2 100644
+--- a/libkern/c++/OSMetaClass.cpp
++++ b/libkern/c++/OSMetaClass.cpp
+@@ -1151,6 +1151,11 @@ void
+ OSMetaClass::applyToInstances(OSMetaClassInstanceApplierFunction applier,
+     void * context) const
+ {
++#if defined(ARM64_BOARD_CONFIG_J8)
++        if ((uintptr_t)this == 0) {
++                return;
++        }
++#endif
+         IOLockLock(sInstancesLock);
+ #if defined(ARM64_BOARD_CONFIG_J8)
+         if (reserved == NULL) {
