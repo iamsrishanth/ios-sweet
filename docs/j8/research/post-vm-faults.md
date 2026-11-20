@@ -350,6 +350,14 @@ Patch 0106 guards a NULL `set`/`reserved` in applyToInstances, but the same
 panic remains (`pc 0x...7b232c`, FAR 0). The NULL is therefore another pointer
 inside the function; disassemble the member function to find it.
 
+## kperf_init_early block (0108)
+
+After the NULL meta-class guard, kernel29 reaches platform registration and
+matching with no panic, then idles. gdb breakpoints after `PE_lockdown_iokit`
+show `vm_set_restrictions` and `kperf_init_early` are entered, but `bsd_init`
+is never reached — the boot thread blocks inside `kperf_init_early`.
+Patch 0108 compiles kperf early init out for J8 (build 44690942059).
+
 ## Meaning
 
 - The 4 KiB non-large-memory kernel now executes deep into XNU VM and platform
