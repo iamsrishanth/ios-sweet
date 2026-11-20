@@ -369,6 +369,16 @@ just after `kauth_init`.
 Next: break at the `kauth_init` return address in bsd_init (`0x…613b0c`) to see
 whether kauth returns, then trace the next init call.
 
+## Next blocker: root device (2026-11-21)
+
+After skipping IOKitInitializeTime, bsd_init passes `vfsinit` (SWEET HFS
+registered) and the platform expert registers. The boot then idles
+(`processor_idle`/`ml_get_timebase`); `vfs_mountroot` has no root device to
+mount.
+
+Next: implement the SDCC/eMMC driver (J8 storage) or provide a synthetic
+ramdisk root via boot args, then mount root and continue to userland.
+
 ## Meaning
 
 - The 4 KiB non-large-memory kernel now executes deep into XNU VM and platform
