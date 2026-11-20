@@ -393,9 +393,15 @@ known physical address in QEMU, pass `pmd0=<base>.<size> rd=md0` in the boot
 args, and mount it.
 
 Missing piece: an HFS image. The repo stages Apple's HFS **driver** sources
-(`0026-stage-hfs.sh`) but has no formatter. Next: port/build `newfs_hfs` from
-the Apple HFS sources (or write a minimal HFS+ formatter), generate an empty
-volume, load it in the harness, and add the `pmd0`/`rd` boot args.
+(`0026-stage-hfs.sh`) but has no formatter. Apple's `hfs` repo at the pinned
+commit (`31d5ec23…`) contains `newfs_hfs/{newfs_hfs.c,makehfs.c,hfs_endian.c}`
+(a macOS build) and `core/hfs_format.h` (on-disk structures only); it has **no
+test images** and no host-side format API.
+
+Next: port/build `newfs_hfs` (or write a minimal HFS+ formatter with the volume
+header, allocation bitmap, extents/catalog/attributes B-trees and empty root
+folder), generate an empty volume, load it at a known PA in the harness, and add
+`pmd0=<base>.<size> rd=md0` to the boot args.
 
 ## Meaning
 
