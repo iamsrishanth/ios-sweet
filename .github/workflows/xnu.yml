@@ -140,6 +140,8 @@ jobs:
       - name: Create empty HFS+ root image
         run: |
           hdiutil create -size 16m -fs HFS+ -volname J8 -layout NONE "$RUNNER_TEMP/root.hfs"
+          ls -l "$RUNNER_TEMP"/root.hfs*
+          mv "$RUNNER_TEMP/root.hfs.dmg" "$RUNNER_TEMP/root.hfs"
           ls -l "$RUNNER_TEMP/root.hfs"
 
       - uses: actions/upload-artifact@v4
