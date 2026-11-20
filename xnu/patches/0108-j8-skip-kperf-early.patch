@@ -1,0 +1,14 @@
+diff --git a/osfmk/kern/startup.c b/osfmk/kern/startup.c
+index bec97fb..b154454 100644
+--- a/osfmk/kern/startup.c
++++ b/osfmk/kern/startup.c
+@@ -779,7 +779,8 @@ kernel_bootstrap_thread(void)
+ 	vm_set_restrictions(machine_info.max_cpus);
+ 
+ 
+-#if KPERF
++#if KPERF && !defined(ARM64_BOARD_CONFIG_J8)
++	/* J8 bring-up: kperf early init blocks before bsd_init. */
+ 	kperf_init_early();
+ #endif
+ 
