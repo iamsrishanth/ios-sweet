@@ -379,6 +379,24 @@ mount.
 Next: implement the SDCC/eMMC driver (J8 storage) or provide a synthetic
 ramdisk root via boot args, then mount root and continue to userland.
 
+## Synthetic root plan (2026-11-21)
+
+XNU already has the memory-disk machinery:
+
+- `bsd/dev/memdev.c` scans the boot-args command line for `pmdN=<base>.<size>`
+  (physical memory disk) or `vmdN=...`, page-aligned.
+- `bsd_init.c` defines `RAMDEV "md0"` and treats `rd=md0` as a ramdisk root;
+  `vfs_mountroot` then mounts HFS from that device.
+
+So a root can be provided without an eMMC driver: load a small HFS image at a
+known physical address in QEMU, pass `pmd0=<base>.<size> rd=md0` in the boot
+args, and mount it.
+
+Missing piece: an HFS image. The repo stages Apple's HFS **driver** sources
+(`0026-stage-hfs.sh`) but has no formatter. Next: port/build `newfs_hfs` from
+the Apple HFS sources (or write a minimal HFS+ formatter), generate an empty
+volume, load it in the harness, and add the `pmd0`/`rd` boot args.
+
 ## Meaning
 
 - The 4 KiB non-large-memory kernel now executes deep into XNU VM and platform
