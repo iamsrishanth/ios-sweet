@@ -28,7 +28,7 @@ evidence.
 | Partition map / storage type (eMMC, not UFS) | **hardware-verified** | live `/proc/partitions`, `/dev/block/by-name`, device tree |
 | Recovery path and rollback assets | **hardware-verified** *(historical Android use)* + documented | `INSTALL-RECOVERY.md` |
 | Page-size capability (`TGran16`) | **documented: no 16K** (unit confirmation failed) | Cortex-A53 r0p4 TRM `TGran16 = 0x0`; EL0 access is architecturally absent (SIGILL measured); the EL1 probe image was built and flashed but the **bootloader rejected it**, so no on-unit read exists |
-| XNU kernel built for J8 | **QEMU: platform expert, no panic, idle** | CI run **44686051113**: `kernel.release.j8`, 11,943,232 bytes, SHA-256 `3231dac830d9c14a56f9c34fb8ead226d62fd433031c35d0301bd596acc42555`. Console reaches "SWEET: platform expert registered" with no panic; matching runs; the CPU then idles in `processor_idle`/`ml_get_timebase` and `bsd_init` is not reached. No phone boot. |
+| XNU kernel built for J8 | **QEMU: BSD init reached** | CI run **44690942059**: `kernel.release.j8`, 11,943,232 bytes, SHA-256 `3594e264263a3608e4d73abb580e17948bb850bb9b805e7b20742956ab3099a4`. Console shows the BSD copyright, "MAC Framework successfully initialized" and buffer headers, then the platform expert registers with no panic; boot then idles. No phone boot. |
 | J8 shim (4 KiB granule MMU) | **researched** | `shim/mmu.c` is 16 KiB-only |
 | Anything booting on the J8 from this project | **QEMU only** | VM init complete; blocked by a NULL platform-expert object; nothing flashed since the rejected probe |
 
@@ -88,6 +88,7 @@ evidence.
 | 2026-11-19 17:40 UTC | Crypto fallbacks for J8 (run **44575684242**) | boots through zones, threads (13) and the panic log; panic `write_pte_fast` unaligned PTE (`ptep=0xfffffff025207290`; `TEST_PAGE_RATIO_4` needs 32-byte alignment) | `evidence/qemu-2026-11-19-write-pte-panic.png` |
 | 2026-11-19 19:02 UTC | Trustcache fallback + platform expert (run **44591021700**) | console reaches "SWEET: platform expert registered"; no panic; boot then stalls (screen unchanged, serial empty) | `evidence/qemu-2026-11-20-platform-expert-registered.png` |
 | 2026-11-20 06:26 UTC | NULL meta-class guard (run **44686051113**) | no panic through platform registration/matching; CPU idles and `bsd_init` is not reached | `evidence/qemu-2026-11-20-no-panic-idle.png` |
+| 2026-11-20 07:05 UTC | Skip kperf early init (run **44690942059**) | bsd_init reached: BSD copyright, MAC Framework, buffer headers; platform expert registered; no panic; boot then idles | `evidence/qemu-2026-11-20-bsd-init-reached.png` |
 | - | Any J8 boot of XNU/iOS | not attempted: no GICv2 delivery, shim, device tree or drivers | - |
 
 ## 5. What this task implemented
