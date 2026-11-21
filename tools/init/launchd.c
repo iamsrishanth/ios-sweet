@@ -32,7 +32,7 @@ j8_syscall(long n, long a, long b, long c)
 static const char init_message[] = "J8 init: hello from userland\n";
 
 void
-_start(void)
+start(void)
 {
 	/* O_WRONLY = 1. /dev/console exists once devfs is mounted. */
 	long fd = j8_syscall(SYS_open, (long)"/dev/console", 1, 0);
