@@ -28,7 +28,7 @@ evidence.
 | Partition map / storage type (eMMC, not UFS) | **hardware-verified** | live `/proc/partitions`, `/dev/block/by-name`, device tree |
 | Recovery path and rollback assets | **hardware-verified** *(historical Android use)* + documented | `INSTALL-RECOVERY.md` |
 | Page-size capability (`TGran16`) | **documented: no 16K** (unit confirmation failed) | Cortex-A53 r0p4 TRM `TGran16 = 0x0`; EL0 access is architecturally absent (SIGILL measured); the EL1 probe image was built and flashed but the **bootloader rejected it**, so no on-unit read exists |
-| XNU kernel built for J8 | **QEMU: root mounted, init exec attempted** | CI run **44935976051**: `kernel.release.j8`, 11,943,232 bytes, SHA-256 `968669f3edcde146118591b9113f2de66ccd5077d4f4033134a01c9ffa5eee3f`. Timer IRQs work (GICC ACK_CTL), root mounts from md0/HFS, `forkproc` creates pid 1, and `exec_init` tries `/sbin/launchd` (fails errno 2 because the ramdisk image is empty). No phone boot. |
+| XNU kernel built for J8 | **QEMU: root mounted, init exec (Mach-O loader)** | CI run **44951542230** + kernel43: root mounts from md0/HFS, `forkproc` creates pid 1, and init exec reaches the Mach-O loader. The minimal init is rejected with `EXEC_EXIT_REASON_BAD_MACHO` (namespace 9 code 1); codesigning was ruled out and both 4 GiB and small `__PAGEZERO` images were tried. No phone boot. |
 | J8 shim (4 KiB granule MMU) | **researched** | `shim/mmu.c` is 16 KiB-only |
 | Anything booting on the J8 from this project | **QEMU only** | VM init complete; blocked by a NULL platform-expert object; nothing flashed since the rejected probe |
 
@@ -92,6 +92,7 @@ evidence.
 | 2026-11-20 12:55 UTC | Skip IOKitInitializeTime (run **44714070014**) | IOResources warning, subsystem strings, SWEET HFS registered, platform expert registered; no panic; idles (root mount/driver wait) | `evidence/qemu-2026-11-21-hfs-registered.png` |
 | 2026-11-21 07:41 UTC | LSE CAS emulation (run **44880248070**) | no panic through mcache/dlil/net init and platform expert; `IOFindBSDRoot` reached; root mount still waits (ramdisk md0 not usable yet) | `evidence/qemu-2026-11-21-netinit-platform-expert.png` |
 | 2026-11-22 00:22 UTC | Timer IRQ + root mount + init exec (run 44935976051) | ACK_CTL GIC fix; HFS corecrypto and pthread-shim NULL fixes; pid 1 exec of `/sbin/launchd` attempted (ENOENT, empty image) | `evidence/qemu-2026-11-22-init-exec.png` |
+| 2026-11-22 03:20 UTC | Root mount + init Mach-O load (runs 44949392535 / 44951542230) | init is exec'd as pid 1 but the loader returns BAD_MACHO; codesign skip and pagezero variants tested | `evidence/qemu-2026-11-22-init-bad-macho.png` |
 | - | Any J8 boot of XNU/iOS | not attempted: no GICv2 delivery, shim, device tree or drivers | - |
 
 ## 5. What this task implemented

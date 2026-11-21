@@ -699,3 +699,18 @@ What it took today (in order): 0058 HID services (Apple IOHIDFamily-1915 user cl
   the default arm64 __PAGEZERO is 4 GiB (0x100000000), which exceeds UINT32_MAX
   and yields LOAD_BADMACHO -> EXEC_EXIT_REASON_BAD_MACHO.
 - Fix: link the init with `-Wl,-pagezero_size,0x10000` (CI run 44951542230).
+
+### Init exec reaches the Mach-O loader, rejected BAD_MACHO (2026-11-22)
+
+- `process_signature` bypass (0122) unblocked the signature policy; the kernel now
+  reaches `load_init_program -> __mac_execve -> exec_activate_image ->
+  exec_mach_imgact` and fails in the loader with `EXEC_EXIT_REASON_BAD_MACHO`
+  (OS_REASON_EXEC namespace 9, code 1).
+- The init artifact is a valid arm64 MH_EXECUTE: __TEXT R+X at 0x100000000,
+  LC_UNIXTHREAD pc in __TEXT, LC_CODE_SIGNATURE, no dyld; `otool` output is in
+  CI log 44949392535.
+- Two attempts failed: default 4 GiB __PAGEZERO and `-pagezero_size,0x10000`
+  (the latter likely fails the arm64 `enforce_hard_pagezero` 4 GiB check).
+- Next: instrument `exec_mach_imgact`/`load_machfile` to print the failing
+  `lret` (and which pass), or generate an LC_MAIN Mach-O with a matching
+  4 GiB pagezero; then retry the boot.
