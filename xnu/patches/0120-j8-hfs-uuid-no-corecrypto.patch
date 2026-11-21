@@ -1,0 +1,32 @@
+diff --git a/bsd/sweet_hfs/core/hfs_vfsops.c b/bsd/sweet_hfs/core/hfs_vfsops.c
+index 557430b..944dc67 100644
+--- a/bsd/sweet_hfs/core/hfs_vfsops.c
++++ b/bsd/sweet_hfs/core/hfs_vfsops.c
+@@ -3979,6 +3979,27 @@ err_exit:
+ void
+ hfs_getvoluuid(struct hfsmount *hfsmp, uuid_t result_uuid)
+ {
++#if defined(ARM64_BOARD_CONFIG_J8)
++	/*
++	 * J8 has no corecrypto: g_crypto_funcs is NULL and corecrypto's MD5Init
++	 * dereferences it (data abort at MD5Init+0x34). Derive a stable
++	 * version-3-shaped UUID without MD5.
++	 */
++	if (uuid_is_null(hfsmp->hfs_full_uuid)) {
++		uuid_t result;
++		uint32_t a = hfsmp->vcbFndrInfo[6];
++		uint32_t b = hfsmp->vcbFndrInfo[7];
++
++		bzero(result, sizeof(result));
++		memcpy(&result[0], &a, sizeof(a));
++		memcpy(&result[4], &b, sizeof(b));
++		result[6] = 0x30 | (result[6] & 0x0F);
++		result[8] = 0x80 | (result[8] & 0x3F);
++		uuid_copy(hfsmp->hfs_full_uuid, result);
++	}
++	uuid_copy(result_uuid, hfsmp->hfs_full_uuid);
++	return;
++#endif
+ 
+ 	if (uuid_is_null(hfsmp->hfs_full_uuid)) {
+ 		uuid_t result;
