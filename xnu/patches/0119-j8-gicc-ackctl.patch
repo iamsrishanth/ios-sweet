@@ -1,0 +1,13 @@
+diff --git a/pexpert/pexpert/arm64/J8.h b/pexpert/pexpert/arm64/J8.h
+index 10ef4fa..cd55cd9 100644
+--- a/pexpert/pexpert/arm64/J8.h
++++ b/pexpert/pexpert/arm64/J8.h
+@@ -76,7 +76,7 @@
+  * and bit 1 is EnableGrp1. Enable both so Group-1 PPIs are delivered either
+  * way (the timer probe shows CNTV ISTATUS=1 but no IRQ with 0x1).
+  */
+-#define GICC_CTLR_ENABLEGRP1      0x00000002
++#define GICC_CTLR_ENABLEGRP1      0x00000006
+ 
+ /*
+  * Qualcomm numbers the architected timer PPIs 1/2/3/0 (secure phys, phys,
