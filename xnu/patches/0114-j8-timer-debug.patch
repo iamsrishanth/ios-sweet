@@ -1,0 +1,36 @@
+diff --git a/work/j8-buildtree35/extract/xnu/osfmk/arm64/machine_routines.c b/work/j8-buildtree35/extract/xnu/osfmk/arm64/machine_routines.c
+index 49f56df..c685cdc 100644
+--- a/work/j8-buildtree35/extract/xnu/osfmk/arm64/machine_routines.c
++++ b/work/j8-buildtree35/extract/xnu/osfmk/arm64/machine_routines.c
+@@ -2048,6 +2048,18 @@ ml_set_decrementer(uint32_t dec_value)
+ 	assert(ml_get_interrupts_enabled() == FALSE);
+ 	cdp->cpu_decrementer = dec_value;
+ 
++#if defined(ARM64_BOARD_CONFIG_J8)
++	{
++		static int j8_dec_log;
++		if (j8_dec_log < 4) {
++			j8_dec_log++;
++			kprintf("J8 dec %u: ctl=%llx tval=%llx\n", dec_value,
++			    __builtin_arm_rsr64("CNTV_CTL_EL0"),
++			    __builtin_arm_rsr64("CNTV_TVAL_EL0"));
++		}
++	}
++#endif
++
+ 	if (cdp->cpu_set_decrementer_func) {
+ 		cdp->cpu_set_decrementer_func(dec_value);
+ 	} else {
+@@ -2275,6 +2287,12 @@ _enable_virtual_timer(void)
+ 	__builtin_arm_wsr64("CNTV_CTL_EL0", cntvctl);
+ 	/* disable the physical timer as a precaution, as its registers reset to architecturally unknown values */
+ 	__builtin_arm_wsr64("CNTP_CTL_EL0", CNTP_CTL_EL0_IMASKED);
++#if defined(ARM64_BOARD_CONFIG_J8)
++	kprintf("J8 timer: CNTV_CTL=%llx TVAL=%llx FRQ=%llx\n",
++	    __builtin_arm_rsr64("CNTV_CTL_EL0"),
++	    __builtin_arm_rsr64("CNTV_TVAL_EL0"),
++	    __builtin_arm_rsr64("CNTFRQ_EL0"));
++#endif
+ }
+ 
+ void
