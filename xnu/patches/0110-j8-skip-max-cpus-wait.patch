@@ -1,0 +1,15 @@
+diff --git a/osfmk/arm/machine_routines_common.c b/osfmk/arm/machine_routines_common.c
+index a6af1b9..7da2226 100644
+--- a/osfmk/arm/machine_routines_common.c
++++ b/osfmk/arm/machine_routines_common.c
+@@ -1284,6 +1284,10 @@ unsigned int
+ ml_wait_max_cpus(void)
+ {
+ 	assert(lockdown_done);
++#if defined(ARM64_BOARD_CONFIG_J8)
++	/* J8 bring-up never runs secondary CPU bring-up; don't sleep forever. */
++	max_cpus_initialized = MAX_CPUS_SET;
++#endif
+ 	lck_mtx_lock(&max_cpus_lock);
+ 	while (max_cpus_initialized != MAX_CPUS_SET) {
+ 		max_cpus_initialized = MAX_CPUS_WAIT;
