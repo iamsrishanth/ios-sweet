@@ -641,3 +641,15 @@ What it took today (in order): 0058 HID services (Apple IOHIDFamily-1915 user cl
   GIC status is currently GICC_CTLR=3, IAR=3fe, and no pending timer IRQ.
 - Next: boot 0117 when CI finishes. If EOI stops the storm, inspect why the
   timer PPI is not visible in the secure GIC view (or use the non-secure alias).
+
+### GIC 1022 root cause: secure access without ACK_CTL (2026-11-21)
+
+- QEMU `hw/intc/arm_gic.c:gic_get_current_pending_irq()` returns 1022 when a
+  Group-1 interrupt is pending and the access is **Secure** while
+  `GICC_CTLR.ACK_CTL` is clear. Our boot shim leaves the kernel in secure EL1,
+  so every GICC access is the secure view.
+- The distributor has PPI 27 pending (`GICD_ISPENDR0=0x08000000`) and enabled,
+  but IAR returned 1022 -> the J8 IRQ branch ignored it as "spurious", and the
+  level line re-fired: the observed 118k IRQ/8s storm.
+- Fix: `GICC_CTLR = EN_GRP1 | ACK_CTL` (0x6); patch 0119 (0118 had set 0x2 as a
+  diagnostic step). With ACK_CTL, secure IAR acknowledges Group-1 PPIs.
