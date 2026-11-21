@@ -1,0 +1,25 @@
+diff --git a/osfmk/arm64/sleh.c b/osfmk/arm64/sleh.c
+index 3c56c7a..875769b 100644
+--- a/osfmk/arm64/sleh.c
++++ b/osfmk/arm64/sleh.c
+@@ -2071,8 +2071,20 @@ sleh_irq(arm_saved_state_t *state)
+ 
+ 	uint32_t iar = pe_gicv2_ack();
+ 	uint32_t intid = iar & 0x3FFu;
++#if defined(ARM64_BOARD_CONFIG_J8)
++	{
++		static unsigned int j8_irq_log;
++		if (j8_irq_log < 16) {
++			j8_irq_log++;
++			kprintf("J8 IRQ %u: IAR=%x VT=%u\n", j8_irq_log, iar,
++			    pe_gicv2_vtimer_intid());
++		}
++	}
++#endif
+ 
+ 	if (intid >= 1020) {
++		/* Complete spurious interrupts too; otherwise a level IRQ can storm. */
++		pe_gicv2_eoi(iar);
+ 		return; /* spurious */
+ 	}
+ 	if (intid == pe_gicv2_vtimer_intid()) {
