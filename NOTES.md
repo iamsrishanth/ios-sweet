@@ -575,3 +575,17 @@ What it took today (in order): 0058 HID services (Apple IOHIDFamily-1915 user cl
   at 0xb1b94000/0x1000000 and `pmd0=...` was added, but mount still waits.
 - Next: trace what `IOFindBSDRoot` waits for (IOMedia service vs md0 attach);
   inspect the RAMDisk nub/md driver attach path.
+
+### No IRQs delivered (2026-11-21, key finding)
+
+- 0113 (LSE CAS) cleared the undefined-instruction panic; boot now passes mcache,
+  dlil/ifnet init and reaches `IOFindBSDRoot` with no panic.
+- gdb: `sleh_irq` and `pe_gicv2_ack` are **never hit** — no interrupts are
+  delivered at all. That is why every timed wait (`IOKitInitializeTime`,
+  `waitForMatchingService(...,30s)`, sleeps) never expires.
+- The ADT GIC reg decodes correctly (LE u64: 0x07000000/0x07010000 plus
+  SOC_BASE 0x01000000 = QEMU GICD 0x08000000 / GICC 0x08010000), so addresses
+  are not the problem.
+- Next: verify GICv2 enable state at runtime (GICD_CTLR/GICC_CTLR/PPI 27) and
+  whether the virtual timer is armed (CNTV_TVAL/CNTV_CTL) in QEMU; fix IRQ
+  delivery so timed waits work.
