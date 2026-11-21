@@ -663,3 +663,15 @@ What it took today (in order): 0058 HID services (Apple IOHIDFamily-1915 user cl
   `g_crypto_funcs` (NULL on J8: no corecrypto kext) and dereferences +0x20.
   Caller: `hfs_getvoluuid` (root mount / getattr).
 - Fix: 0120 gives J8 a no-MD5 UUID fallback derived from `vcbFndrInfo`.
+
+### Root mount + init exec reached (2026-11-22, run 44935976051)
+
+- 0119 (GICC EN_GRP1|ACK_CTL): timer IRQs work. Probe shows `CTL=1`,
+  decrementer re-armed, `DEC` counter increases; boot proceeds to BSD init.
+- 0120 (HFS UUID without corecrypto): clears the MD5Init/g_crypto_funcs panic.
+- 0121 (pthread proc-hash shims no-op): clears the forkproc NULL+0x40 panic.
+- New state: root mounts from md0/HFS, `forkproc` creates pid 1 (`init`), and
+  `exec_init` attempts `/sbin/launchd`; panic is `errno 2` because the HFS image
+  is empty. This is the first boot to reach userland exec.
+- Next: put a launchd/init Mach-O into the HFS image (and handle AMFI/codesign),
+  then observe exec and the first user process.
