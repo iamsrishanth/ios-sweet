@@ -653,3 +653,13 @@ What it took today (in order): 0058 HID services (Apple IOHIDFamily-1915 user cl
   level line re-fired: the observed 118k IRQ/8s storm.
 - Fix: `GICC_CTLR = EN_GRP1 | ACK_CTL` (0x6); patch 0119 (0118 had set 0x2 as a
   diagnostic step). With ACK_CTL, secure IAR acknowledges Group-1 PPIs.
+
+### Root mount panic: HFS UUID needs corecrypto (2026-11-21)
+
+- With ACK_CTL (0119), IRQs and the timer work: probe shows `CTL=1 TVAL=... DEC=..`
+  and the boot continues past the platform expert to root mount.
+- Panic ~~30-45 s in: QEMU `-d int` gives ELR `0xfffffff0077f64a4` =
+  `MD5Init+0x34`, FAR `0x20`, ESR `0x96000005`. `MD5Init` loads
+  `g_crypto_funcs` (NULL on J8: no corecrypto kext) and dereferences +0x20.
+  Caller: `hfs_getvoluuid` (root mount / getattr).
+- Fix: 0120 gives J8 a no-MD5 UUID fallback derived from `vcbFndrInfo`.
