@@ -589,3 +589,17 @@ What it took today (in order): 0058 HID services (Apple IOHIDFamily-1915 user cl
 - Next: verify GICv2 enable state at runtime (GICD_CTLR/GICC_CTLR/PPI 27) and
   whether the virtual timer is armed (CNTV_TVAL/CNTV_CTL) in QEMU; fix IRQ
   delivery so timed waits work.
+
+### Undefined-instruction loop at ldadd (2026-11-21, later)
+
+- gdb on `handle_uncategorized`: the faulting instruction is `ldadd x8, x8, [x9]`
+  at 0x71d0a54 (kernel35), inside `__firehose_merge_updates`; the handler
+  emulates it correctly and returns to PC+4.
+- QEMU `-d int` shows repeated `ldadd` undefined-instruction exceptions, i.e.
+  the guest keeps executing this LSE instruction in the firehose merge loop.
+- GIC state at runtime: GICD_CTLR=0x2, GICD_ISENABLER0=0x0800ffff (PPI 27
+  enabled), IGROUPR0=0xffffffff, GICC_CTLR=0x1, PMR=0xff, IAR=0x3fe (spurious).
+  `sleh_irq` is still never hit, so no IRQ is taken.
+- Next: decide whether the firehose merge loop is the stall itself (it may run
+  with IRQs masked) and disable/bypass firehose logging for J8, or verify the
+  CNTV timer arming (system registers not readable via QEMU gdb).
