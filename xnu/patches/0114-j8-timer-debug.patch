@@ -1,7 +1,7 @@
-diff --git a/work/j8-buildtree35/extract/xnu/osfmk/arm64/machine_routines.c b/work/j8-buildtree35/extract/xnu/osfmk/arm64/machine_routines.c
+diff --git a/osfmk/arm64/machine_routines.c b/osfmk/arm64/machine_routines.c
 index 49f56df..c685cdc 100644
---- a/work/j8-buildtree35/extract/xnu/osfmk/arm64/machine_routines.c
-+++ b/work/j8-buildtree35/extract/xnu/osfmk/arm64/machine_routines.c
+--- a/osfmk/arm64/machine_routines.c
++++ b/osfmk/arm64/machine_routines.c
 @@ -2048,6 +2048,18 @@ ml_set_decrementer(uint32_t dec_value)
  	assert(ml_get_interrupts_enabled() == FALSE);
  	cdp->cpu_decrementer = dec_value;

@@ -1,7 +1,7 @@
-diff --git a/work/j8-buildtree35/extract/xnu/bsd/kern/bsd_init.c b/work/j8-buildtree35/extract/xnu/bsd/kern/bsd_init.c
+diff --git a/bsd/kern/bsd_init.c b/bsd/kern/bsd_init.c
 index 9c3763c..2c6941c 100644
---- a/work/j8-buildtree35/extract/xnu/bsd/kern/bsd_init.c
-+++ b/work/j8-buildtree35/extract/xnu/bsd/kern/bsd_init.c
+--- a/bsd/kern/bsd_init.c
++++ b/bsd/kern/bsd_init.c
 @@ -706,6 +706,16 @@ bsd_init(void)
  	sweet_hfs_register();
  #endif
@@ -19,10 +19,10 @@ index 9c3763c..2c6941c 100644
  #if CONFIG_PROC_UUID_POLICY
  	/* Initial proc_uuid_policy subsystem */
  	bsd_init_kprintf("calling proc_uuid_policy_init()\n");
-diff --git a/work/j8-buildtree35/extract/xnu/osfmk/arm64/machine_routines.c b/work/j8-buildtree35/extract/xnu/osfmk/arm64/machine_routines.c
+diff --git a/osfmk/arm64/machine_routines.c b/osfmk/arm64/machine_routines.c
 index c685cdc..5b5a6eb 100644
---- a/work/j8-buildtree35/extract/xnu/osfmk/arm64/machine_routines.c
-+++ b/work/j8-buildtree35/extract/xnu/osfmk/arm64/machine_routines.c
+--- a/osfmk/arm64/machine_routines.c
++++ b/osfmk/arm64/machine_routines.c
 @@ -2040,6 +2040,9 @@ ml_interrupt_prewarm(__unused uint64_t deadline)
  /*
   * Assumes fiq, irq disabled.
