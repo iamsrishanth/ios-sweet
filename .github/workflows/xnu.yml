@@ -147,13 +147,18 @@ jobs:
           file "$RUNNER_TEMP/rootdir/sbin/launchd"
           codesign -s - --force "$RUNNER_TEMP/rootdir/sbin/launchd" || true
 
-      - name: Create HFS+ root image with init
+      - name: Create raw HFS+ root image with init
         run: |
-          hdiutil create -size 16m -fs HFS+ -volname J8 -layout NONE \
-            -srcfolder "$RUNNER_TEMP/rootdir" "$RUNNER_TEMP/root.hfs"
-          ls -l "$RUNNER_TEMP"/root.hfs*
-          mv "$RUNNER_TEMP/root.hfs.dmg" "$RUNNER_TEMP/root.hfs"
+          dd if=/dev/zero of="$RUNNER_TEMP/root.hfs" bs=1m count=16
+          newfs_hfs -v J8 "$RUNNER_TEMP/root.hfs"
+          mkdir -p "$RUNNER_TEMP/mnt"
+          hdiutil attach -imagekey diskimage-class=CRawDiskImage \
+            -mountpoint "$RUNNER_TEMP/mnt" "$RUNNER_TEMP/root.hfs"
+          mkdir -p "$RUNNER_TEMP/mnt/sbin"
+          cp "$RUNNER_TEMP/rootdir/sbin/launchd" "$RUNNER_TEMP/mnt/sbin/launchd"
+          hdiutil detach "$RUNNER_TEMP/mnt"
           ls -l "$RUNNER_TEMP/root.hfs"
+          xxd -l 16 -s 1024 "$RUNNER_TEMP/root.hfs"
 
       - uses: actions/upload-artifact@v4
         with:
