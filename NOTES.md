@@ -603,3 +603,15 @@ What it took today (in order): 0058 HID services (Apple IOHIDFamily-1915 user cl
 - Next: decide whether the firehose merge loop is the stall itself (it may run
   with IRQs masked) and disable/bypass firehose logging for J8, or verify the
   CNTV timer arming (system registers not readable via QEMU gdb).
+
+### Timer debug build (2026-11-21, run 44911507369)
+
+- 0114 adds J8 prints in `_enable_virtual_timer` and `ml_set_decrementer`.
+- Booted: the prints do not appear on the framebuffer console (early console is
+  serial, which is empty), so they do not confirm/deny arming on screen.
+- Source: arm64 uses `empty_funcs` (all NULL), so `cpu_set_decrementer_func` is
+  NULL and `ml_set_decrementer` falls back to writing `CNTV_TVAL_EL0` — arming
+  should work if `ml_set_decrementer` is ever called.
+- Next: move the timer debug print to a console-visible point (bsd_init right
+  after HFS registration) and print CNTV_CTL/TVAL/CNTVCT, or log every
+  `ml_set_decrementer` call with a counter.
