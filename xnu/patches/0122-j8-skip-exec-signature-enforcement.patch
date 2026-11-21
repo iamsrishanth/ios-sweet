@@ -1,0 +1,24 @@
+diff --git a/bsd/kern/kern_exec.c b/bsd/kern/kern_exec.c
+index 68612db..4fff7cd 100644
+--- a/bsd/kern/kern_exec.c
++++ b/bsd/kern/kern_exec.c
+@@ -7338,6 +7338,19 @@ process_signature(proc_t p, struct image_params *imgp)
+ 	const int vfexec = 0;
+ 	os_reason_t signature_failure_reason = OS_REASON_NULL;
+ 
++#if defined(ARM64_BOARD_CONFIG_J8)
++	/*
++	 * J8 has no AMFI kext, trust cache, taskgated or launch-constraint
++	 * support. Every user binary is unsigned at this stage; skipping the
++	 * signature policy here lets exec complete instead of SIGKILLing init
++	 * from the MAC label-update path.
++	 */
++	proc_lock(p);
++	proc_csflags_update(p, imgp->ip_csflags);
++	proc_unlock(p);
++	return 0;
++#endif
++
+ 	/*
+ 	 * Override inherited code signing flags with the
+ 	 * ones for the process that is being successfully
