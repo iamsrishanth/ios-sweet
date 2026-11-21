@@ -1,0 +1,17 @@
+diff --git a/bsd/pthread/pthread_shims.c b/bsd/pthread/pthread_shims.c
+index 84e350b..4418e9c 100644
+--- a/bsd/pthread/pthread_shims.c
++++ b/bsd/pthread/pthread_shims.c
+@@ -315,7 +315,12 @@ void
+ pthread_init(void)
+ {
+ 	if (!pthread_functions) {
++#if defined(ARM64_BOARD_CONFIG_J8)
++		/* J8 bring-up: no pthread kext; init is a no-op. */
++		return;
++#else
+ 		panic("pthread kernel extension not loaded (function table is NULL).");
++#endif
+ 	}
+ 	pthread_functions->pthread_init();
+ }
