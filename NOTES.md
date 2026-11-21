@@ -615,3 +615,16 @@ What it took today (in order): 0058 HID services (Apple IOHIDFamily-1915 user cl
 - Next: move the timer debug print to a console-visible point (bsd_init right
   after HFS registration) and print CNTV_CTL/TVAL/CNTVCT, or log every
   `ml_set_decrementer` call with a counter.
+
+### IRQs now delivered, timer storm (2026-11-21, 0116)
+
+- Timer probe (0115) at bsd_init: `J8 timer: CTL=5 TVAL=ffa0326a CNT=124b615
+  DEC=5` — CNTV ISTATUS=1 (interrupt asserted), 5 decrementer calls.
+- 0116 sets `GICC_CTLR_ENABLEGRP1=0x3` (both groups); runtime GICC_CTLR now
+  reads 0x3. QEMU `-d int` then shows **118,574 IRQ exceptions in 8 s** — a
+  timer storm. Boot stalls right after the ADT `"RAMDisk" not a kext` line.
+- `sleh_irq` J8 branch does call `rtclock_intr(TRUE)` for the vtimer INTID and
+  EOIs, so either the INTID does not match (falls to the generic `else` and
+  re-fires) or `rtclock_intr` re-arms a deadline already in the past.
+- Next: print the first IRQ INTIDs (and `intid == pe_gicv2_vtimer_intid()`
+  result) once, and check the CNTFRQ/timebase used by `rtclock_decrementer`.
