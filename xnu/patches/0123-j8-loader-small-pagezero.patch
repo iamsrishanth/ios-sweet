@@ -1,0 +1,19 @@
+diff --git a/bsd/kern/mach_loader.c b/bsd/kern/mach_loader.c
+index 1756185..358712d 100644
+--- a/bsd/kern/mach_loader.c
++++ b/bsd/kern/mach_loader.c
+@@ -457,6 +457,14 @@ load_machfile(
+ 	load_result_t           myresult;
+ 	load_return_t           lret;
+ 	boolean_t enforce_hard_pagezero = TRUE;
++#if defined(ARM64_BOARD_CONFIG_J8)
++	/*
++	 * J8 bring-up userland is linked with a small __PAGEZERO. The normal
++	 * arm64 4-GiB hard-pagezero rule is incompatible with this experimental
++	 * address-space layout; the kernel still maps user text above zero.
++	 */
++	enforce_hard_pagezero = FALSE;
++#endif
+ 	int in_exec = (imgp->ip_flags & IMGPF_EXEC);
+ 	task_t task = current_task();
+ 	int64_t                 aslr_page_offset = 0;
