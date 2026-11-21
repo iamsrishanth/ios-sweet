@@ -1,0 +1,31 @@
+diff --git a/bsd/pthread/pthread_shims.c b/bsd/pthread/pthread_shims.c
+index 4418e9c..724b592 100644
+--- a/bsd/pthread/pthread_shims.c
++++ b/bsd/pthread/pthread_shims.c
+@@ -328,12 +328,26 @@ pthread_init(void)
+ void
+ pth_proc_hashinit(proc_t p)
+ {
++#if defined(ARM64_BOARD_CONFIG_J8)
++	/*
++	 * J8 has no pthread kext: pthread_init() returns early, so the
++	 * pthread_kern callbacks _pth_proc_hashinit() uses are zero.
++	 * forkproc() calls this shim; make it a no-op instead of a NULL+0x40
++	 * data abort.
++	 */
++	(void)p;
++	return;
++#endif
+ 	pthread_functions->pth_proc_hashinit(p);
+ }
+ 
+ void
+ pth_proc_hashdelete(proc_t p)
+ {
++#if defined(ARM64_BOARD_CONFIG_J8)
++	(void)p;
++	return;
++#endif
+ 	pthread_functions->pth_proc_hashdelete(p);
+ }
+ 
