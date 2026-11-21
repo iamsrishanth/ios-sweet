@@ -564,3 +564,14 @@ What it took today (in order): 0058 HID services (Apple IOHIDFamily-1915 user cl
   `_aes_encrypt_key128+0x14` (FAR 0x78), called from `_tcp_init+0x164`
   (corecrypto `g_crypto_funcs` is NULL). Next: patch the TCP init crypto path
   for J8 like 0102.
+
+### Net init reached (2026-11-21, run 44880248070)
+
+- 0113 (LSE CAS emulation) cleared the undefined-instruction panic.
+- No panic now through mcache, dlil_init, ifnet_attach lo0/gif0/stf0 and the
+  platform expert. `IOFindBSDRoot` is reached (gdb), but `vfs_mountroot` and
+  `bsdinit_task` are not: root mount still waits for a usable root device.
+- Memory-disk plumbing exists (`memdev` pmdN= + `rd=md0`); the ADT RAMDisk is
+  at 0xb1b94000/0x1000000 and `pmd0=...` was added, but mount still waits.
+- Next: trace what `IOFindBSDRoot` waits for (IOMedia service vs md0 attach);
+  inspect the RAMDisk nub/md driver attach path.

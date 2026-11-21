@@ -28,7 +28,7 @@ evidence.
 | Partition map / storage type (eMMC, not UFS) | **hardware-verified** | live `/proc/partitions`, `/dev/block/by-name`, device tree |
 | Recovery path and rollback assets | **hardware-verified** *(historical Android use)* + documented | `INSTALL-RECOVERY.md` |
 | Page-size capability (`TGran16`) | **documented: no 16K** (unit confirmation failed) | Cortex-A53 r0p4 TRM `TGran16 = 0x0`; EL0 access is architecturally absent (SIGILL measured); the EL1 probe image was built and flashed but the **bootloader rejected it**, so no on-unit read exists |
-| XNU kernel built for J8 | **QEMU: BSD vfsinit/HFS reached** | CI run **44714070014**: `kernel.release.j8`, 11,943,232 bytes, SHA-256 `f030a53567af12d6468afdd7c87835bd9385053d867816e9a3752751402aa08b`. BSD init passes IOKitInitializeTime, registers HFS (hfs-627.100.6) and the platform expert; no panic; then idles waiting for a root device/driver. No phone boot. |
+| XNU kernel built for J8 | **QEMU: net init + IOFindBSDRoot** | CI run **44880248070**: `kernel.release.j8`, 11,943,232 bytes, SHA-256 `03e468449674437f4c6a1f3574927c0548ad87e28fa7e8bf5595224addbb20df`. Boot passes mcache, dlil/ifnet init (lo0/gif0/stf0) and the platform expert with no panic; reaches `IOFindBSDRoot`, which still waits for a root device. No phone boot. |
 | J8 shim (4 KiB granule MMU) | **researched** | `shim/mmu.c` is 16 KiB-only |
 | Anything booting on the J8 from this project | **QEMU only** | VM init complete; blocked by a NULL platform-expert object; nothing flashed since the rejected probe |
 
@@ -90,6 +90,7 @@ evidence.
 | 2026-11-20 06:26 UTC | NULL meta-class guard (run **44686051113**) | no panic through platform registration/matching; CPU idles and `bsd_init` is not reached | `evidence/qemu-2026-11-20-no-panic-idle.png` |
 | 2026-11-20 07:05 UTC | Skip kperf early init (run **44690942059**) | bsd_init reached: BSD copyright, MAC Framework, buffer headers; platform expert registered; no panic; boot then idles | `evidence/qemu-2026-11-20-bsd-init-reached.png` |
 | 2026-11-20 12:55 UTC | Skip IOKitInitializeTime (run **44714070014**) | IOResources warning, subsystem strings, SWEET HFS registered, platform expert registered; no panic; idles (root mount/driver wait) | `evidence/qemu-2026-11-21-hfs-registered.png` |
+| 2026-11-21 07:41 UTC | LSE CAS emulation (run **44880248070**) | no panic through mcache/dlil/net init and platform expert; `IOFindBSDRoot` reached; root mount still waits (ramdisk md0 not usable yet) | `evidence/qemu-2026-11-21-netinit-platform-expert.png` |
 | - | Any J8 boot of XNU/iOS | not attempted: no GICv2 delivery, shim, device tree or drivers | - |
 
 ## 5. What this task implemented
