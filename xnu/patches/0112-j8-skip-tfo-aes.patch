@@ -1,0 +1,15 @@
+diff --git a/bsd/netinet/tcp_subr.c b/bsd/netinet/tcp_subr.c
+index 1f20ef0..d6ef517 100644
+--- a/bsd/netinet/tcp_subr.c
++++ b/bsd/netinet/tcp_subr.c
+@@ -486,7 +486,10 @@ tcp_tfo_init(void)
+ 	u_char key[TCP_FASTOPEN_KEYLEN];
+ 
+ 	read_frandom(key, sizeof(key));
++#if !defined(ARM64_BOARD_CONFIG_J8)
++	/* J8 bring-up: corecrypto table is NULL; TFO key setup is skipped. */
+ 	aes_encrypt_key128(key, &tfo_ctx);
++#endif
+ }
+ 
+ /*
