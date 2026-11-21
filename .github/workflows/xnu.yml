@@ -137,9 +137,20 @@ jobs:
           path: out/
           if-no-files-found: warn
 
-      - name: Create empty HFS+ root image
+      - name: Build minimal J8 init (/sbin/launchd)
         run: |
-          hdiutil create -size 16m -fs HFS+ -volname J8 -layout NONE "$RUNNER_TEMP/root.hfs"
+          mkdir -p "$RUNNER_TEMP/rootdir/sbin"
+          clang -target arm64-apple-ios16.0 -O2 -nostdlib -static \
+            -Wl,-e,_start -o "$RUNNER_TEMP/rootdir/sbin/launchd" tools/init/launchd.c \
+            || clang -target arm64-apple-macos11.0 -O2 -nostdlib -static \
+            -Wl,-e,_start -o "$RUNNER_TEMP/rootdir/sbin/launchd" tools/init/launchd.c
+          file "$RUNNER_TEMP/rootdir/sbin/launchd"
+          codesign -s - --force "$RUNNER_TEMP/rootdir/sbin/launchd" || true
+
+      - name: Create HFS+ root image with init
+        run: |
+          hdiutil create -size 16m -fs HFS+ -volname J8 -layout NONE \
+            -srcfolder "$RUNNER_TEMP/rootdir" "$RUNNER_TEMP/root.hfs"
           ls -l "$RUNNER_TEMP"/root.hfs*
           mv "$RUNNER_TEMP/root.hfs.dmg" "$RUNNER_TEMP/root.hfs"
           ls -l "$RUNNER_TEMP/root.hfs"
