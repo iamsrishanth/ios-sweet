@@ -556,3 +556,11 @@ What it took today (in order): 0058 HID services (Apple IOHIDFamily-1915 user cl
   the root-mount path, likely an IOService/media wait.
 - Next: disassemble `bsd_init` after 0x7613ee4 and break at the next call
   returns to find the blocking call.
+
+### After pthread fallback (2026-11-21)
+
+- 0110 worked: `mcache_init` returns, `mbinit: done 164 MB total pool size`.
+- 0111 works past the pthread panic; new panic: data abort at
+  `_aes_encrypt_key128+0x14` (FAR 0x78), called from `_tcp_init+0x164`
+  (corecrypto `g_crypto_funcs` is NULL). Next: patch the TCP init crypto path
+  for J8 like 0102.
