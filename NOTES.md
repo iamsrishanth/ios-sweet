@@ -547,3 +547,12 @@ What it took today (in order): 0058 HID services (Apple IOHIDFamily-1915 user cl
   message yet.
 - Next: trace `IOFindBSDRoot`/md attach with exact kernel31 addresses
   (`buildtree31` map), then populate the HFS image (launchd) once mount works.
+
+### Ramdisk root trace (2026-11-21, later)
+
+- Exact kernel31 addresses: `vfs_mountroot` (0x73bf260), `bsdinit_task`
+  (0x7614940) and `IOFindBSDRoot` (0x7899250) are **not reached**.
+- The block is in `bsd_init` between `sweet_hfs_register` (0x7613ee0 call) and
+  the root-mount path, likely an IOService/media wait.
+- Next: disassemble `bsd_init` after 0x7613ee4 and break at the next call
+  returns to find the blocking call.
