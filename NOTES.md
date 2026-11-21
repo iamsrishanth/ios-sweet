@@ -535,3 +535,15 @@ What it took today (in order): 0058 HID services (Apple IOHIDFamily-1915 user cl
      cpu_init, before arm_vm_init.
   5. panic hook at top of panic_trap_to_debugger: va_copy + _doprnt(fmt, &copy, sweet_early_putc, 16).
   Verify with tools/xnu-cc.py (compile+symbols) and patch-order simulation before the single CI run.
+
+## QEMU ramdisk root (2026-11-21)
+
+- CI `xnu.yml` now creates an empty 16 MiB HFS+ image with `hdiutil` and uploads
+  it as the `root-hfs` artifact (run **44822716845**, image 16,777,216 bytes,
+  `H+` at 0x400).
+- `tools/mkpayload.py --ramdisk <img> --cmdline "... rd=md0"` embeds the image
+  and adds `/chosen/memory-map` RAMDisk. Boot shows `"RAMDisk" not a kext`,
+  SWEET HFS registered, platform expert registered, then idles; no root-mount
+  message yet.
+- Next: trace `IOFindBSDRoot`/md attach with exact kernel31 addresses
+  (`buildtree31` map), then populate the HFS image (launchd) once mount works.
