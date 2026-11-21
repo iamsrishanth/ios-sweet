@@ -628,3 +628,16 @@ What it took today (in order): 0058 HID services (Apple IOHIDFamily-1915 user cl
   re-fires) or `rtclock_intr` re-arms a deadline already in the past.
 - Next: print the first IRQ INTIDs (and `intid == pe_gicv2_vtimer_intid()`
   result) once, and check the CNTFRQ/timebase used by `rtclock_decrementer`.
+
+### IRQ storm diagnosis (2026-11-21, after 0116)
+
+- With GICC_CTLR=0x3, QEMU delivers IRQs, but GICC_IAR returns **0x3fe**
+  (spurious) repeatedly; live breakpoint at the IRQ handler's return shows
+  x0=0x3fe on every sample. QEMU logged 118k IRQs/8s.
+- Therefore the storm is not the timer PPI being serviced: `pe_gicv2_ack()`
+  returns spurious ID 1022, and the J8 branch currently returns without EOI.
+  Patch 0117 adds an EOI for spurious IDs and logs the first IAR/VT values.
+- The GICC IAR live read at 0x0801000c should be the source of truth; the
+  GIC status is currently GICC_CTLR=3, IAR=3fe, and no pending timer IRQ.
+- Next: boot 0117 when CI finishes. If EOI stops the storm, inspect why the
+  timer PPI is not visible in the secure GIC view (or use the non-secure alias).
