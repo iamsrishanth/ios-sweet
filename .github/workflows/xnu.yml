@@ -141,10 +141,10 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/rootdir/sbin"
           clang -target arm64-apple-ios16.0 -O2 -nostdlib -static \
-            -Wl,-e,_start -Wl,-no_pie \
+            -Wl,-e,_start -Wl,-no_pie -Wl,-pagezero_size,0x10000 \
             -o "$RUNNER_TEMP/rootdir/sbin/launchd" tools/init/launchd.c \
             || clang -target arm64-apple-macos11.0 -O2 -nostdlib -static \
-            -Wl,-e,_start -Wl,-no_pie \
+            -Wl,-e,_start -Wl,-no_pie -Wl,-pagezero_size,0x10000 \
             -o "$RUNNER_TEMP/rootdir/sbin/launchd" tools/init/launchd.c
           file "$RUNNER_TEMP/rootdir/sbin/launchd"
           otool -hv "$RUNNER_TEMP/rootdir/sbin/launchd" || true
