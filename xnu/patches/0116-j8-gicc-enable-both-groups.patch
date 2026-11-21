@@ -1,0 +1,18 @@
+diff --git a/pexpert/pexpert/arm64/J8.h b/pexpert/pexpert/arm64/J8.h
+index f135823..bca3e4b 100644
+--- a/pexpert/pexpert/arm64/J8.h
++++ b/pexpert/pexpert/arm64/J8.h
+@@ -71,7 +71,12 @@
+  * aliases EnableGrp1 to bit 0.
+  */
+ #define GICD_CTLR_ENABLEGRP1      0x00000002
+-#define GICC_CTLR_ENABLEGRP1      0x00000001
++/*
++ * QEMU's GICv2 exposes the secure GICC_CTLR view, where bit 0 is EnableGrp0
++ * and bit 1 is EnableGrp1. Enable both so Group-1 PPIs are delivered either
++ * way (the timer probe shows CNTV ISTATUS=1 but no IRQ with 0x1).
++ */
++#define GICC_CTLR_ENABLEGRP1      0x00000003
+ 
+ /*
+  * Qualcomm numbers the architected timer PPIs 1/2/3/0 (secure phys, phys,
