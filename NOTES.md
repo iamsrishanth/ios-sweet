@@ -689,3 +689,13 @@ What it took today (in order): 0058 HID services (Apple IOHIDFamily-1915 user cl
 - Next: CI run 44949392535 prints `otool -hv/-l` and uploads the binary; use
   the load commands to see why (LC_MAIN vs LC_UNIXTHREAD, segment alignment,
   cpusubtype).
+
+### BAD_MACHO cause: __PAGEZERO exceeds UINT32_MAX (2026-11-22)
+
+- The init artifact is structurally valid: arm64 MH_EXECUTE, __TEXT R+X at
+  0x100000000 (16K), entry 0x100003f8c, LC_UNIXTHREAD pc=entry, LC_CODE_SIGNATURE,
+  no dyld.
+- `load_machfile` rejects a PAGEZERO when `vmaddr + vmsize + slide > UINT32_MAX`;
+  the default arm64 __PAGEZERO is 4 GiB (0x100000000), which exceeds UINT32_MAX
+  and yields LOAD_BADMACHO -> EXEC_EXIT_REASON_BAD_MACHO.
+- Fix: link the init with `-Wl,-pagezero_size,0x10000` (CI run 44951542230).
