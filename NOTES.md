@@ -675,3 +675,17 @@ What it took today (in order): 0058 HID services (Apple IOHIDFamily-1915 user cl
   is empty. This is the first boot to reach userland exec.
 - Next: put a launchd/init Mach-O into the HFS image (and handle AMFI/codesign),
   then observe exec and the first user process.
+
+### Init exec: BAD_MACHO (2026-11-22, runs 44940610995 / 44947199466)
+
+- The HFS image now contains /sbin/launchd (raw HFS+, 16 MiB, built in CI with
+  `clang -target arm64-apple-ios16.0 -nostdlib -static -Wl,-e,_start`).
+- Kernel42 with that image: root mounted, pid 1 created, init exec attempted.
+- Kernel43 (0122 skips process_signature enforcement): still killed, but the
+  reason is `EXEC_EXIT_REASON_BAD_MACHO` (code 1), not codesigning.
+- Backtrace: `bsdinit_task -> load_init_program -> __mac_execve ->
+  exec_activate_image -> exec_mach_imgact` then the generic exec-failure
+  SIGKILL. So the Mach-O loader rejects the binary.
+- Next: CI run 44949392535 prints `otool -hv/-l` and uploads the binary; use
+  the load commands to see why (LC_MAIN vs LC_UNIXTHREAD, segment alignment,
+  cpusubtype).
