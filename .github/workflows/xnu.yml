@@ -149,8 +149,8 @@ jobs:
 
       - name: Create raw HFS+ root image with init
         run: |
-          dd if=/dev/zero of="$RUNNER_TEMP/root.hfs" bs=1m count=16
-          newfs_hfs -v J8 "$RUNNER_TEMP/root.hfs"
+          hdiutil create -size 16m -fs HFS+ -volname J8 -layout NONE "$RUNNER_TEMP/root.hfs.dmg"
+          mv "$RUNNER_TEMP/root.hfs.dmg" "$RUNNER_TEMP/root.hfs"
           mkdir -p "$RUNNER_TEMP/mnt"
           hdiutil attach -imagekey diskimage-class=CRawDiskImage \
             -mountpoint "$RUNNER_TEMP/mnt" "$RUNNER_TEMP/root.hfs"
