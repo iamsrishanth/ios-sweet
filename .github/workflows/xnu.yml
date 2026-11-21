@@ -141,11 +141,21 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/rootdir/sbin"
           clang -target arm64-apple-ios16.0 -O2 -nostdlib -static \
-            -Wl,-e,_start -o "$RUNNER_TEMP/rootdir/sbin/launchd" tools/init/launchd.c \
+            -Wl,-e,_start -Wl,-no_pie \
+            -o "$RUNNER_TEMP/rootdir/sbin/launchd" tools/init/launchd.c \
             || clang -target arm64-apple-macos11.0 -O2 -nostdlib -static \
-            -Wl,-e,_start -o "$RUNNER_TEMP/rootdir/sbin/launchd" tools/init/launchd.c
+            -Wl,-e,_start -Wl,-no_pie \
+            -o "$RUNNER_TEMP/rootdir/sbin/launchd" tools/init/launchd.c
           file "$RUNNER_TEMP/rootdir/sbin/launchd"
+          otool -hv "$RUNNER_TEMP/rootdir/sbin/launchd" || true
+          otool -l "$RUNNER_TEMP/rootdir/sbin/launchd" | head -120 || true
           codesign -s - --force "$RUNNER_TEMP/rootdir/sbin/launchd" || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: j8-init
+          path: ${{ runner.temp }}/rootdir/sbin/launchd
+          if-no-files-found: warn
 
       - name: Create raw HFS+ root image with init
         run: |
