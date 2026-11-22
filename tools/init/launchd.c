@@ -27,8 +27,11 @@
 #define MACH_PORT_RIGHT_RECEIVE   1L
 #define MACH_MSG_TYPE_COPY_SEND   19U
 #define MACH_MSG_TYPE_MAKE_SEND   20L
+#define MACH_MSGH_BITS(remote, local) ((remote) | ((local) << 8))
 #define MACH_SEND_MSG              1L
 #define MACH_RCV_MSG               2L
+#define MACH_RCV_TIMEOUT           0x00000010L
+#define KERN_SUCCESS               0L
 
 static inline long
 j8_syscall(long n, long a, long b, long c)
@@ -226,15 +229,15 @@ start(void)
 	unsigned int port = 0;
 	long kr = j8_mach_trap3(MACH_TRAP_PORT_ALLOCATE, self,
 	    MACH_PORT_RIGHT_RECEIVE, (long)&port);
-	if (kr == 0 && fd >= 0) {
+	if (kr == KERN_SUCCESS && fd >= 0) {
 		(void)j8_syscall(SYS_write, fd, (long)mach_port_message,
 		    sizeof(mach_port_message) - 1);
 	}
-	if (kr == 0) {
-		(void)j8_mach_trap4(MACH_TRAP_PORT_INSERT, self, port,
+	if (kr == KERN_SUCCESS) {
+		long insert_result = j8_mach_trap4(MACH_TRAP_PORT_INSERT, self, port,
 		    port, MACH_MSG_TYPE_MAKE_SEND);
 		struct mach_probe_message sent = {
-			.header = {MACH_MSG_TYPE_COPY_SEND, sizeof(sent.header) + 8,
+			.header = {MACH_MSGH_BITS(MACH_MSG_TYPE_COPY_SEND, 0), sizeof(struct mach_msg_header) + 8,
 			    port, 0, 0, 0x4a38},
 			.payload = "j8-mach"
 		};
@@ -242,8 +245,8 @@ start(void)
 		long send_result = j8_mach_trap7(MACH_TRAP_MSG, (long)&sent,
 		    MACH_SEND_MSG, sent.header.size, 0, 0, 0, 0);
 		long receive_result = j8_mach_trap7(MACH_TRAP_MSG, (long)&received,
-		    MACH_RCV_MSG, 0, sizeof(received), port, 0, 0);
-		if (send_result == 0 && receive_result == 0 &&
+		    MACH_RCV_MSG | MACH_RCV_TIMEOUT, 0, sizeof(received), port, 1, 0);
+		if (insert_result == KERN_SUCCESS && send_result == KERN_SUCCESS && receive_result == KERN_SUCCESS &&
 		    received.header.id == 0x4a38 && received.payload[0] == 'j' && fd >= 0) {
 			(void)j8_syscall(SYS_write, fd, (long)mach_ipc_message,
 			    sizeof(mach_ipc_message) - 1);
