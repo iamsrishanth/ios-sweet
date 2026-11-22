@@ -1,0 +1,29 @@
+diff --git a/iokit/bsddev/IOKitBSDInit.cpp b/iokit/bsddev/IOKitBSDInit.cpp
+index e6c74aa..21129ce 100644
+--- a/iokit/bsddev/IOKitBSDInit.cpp
++++ b/iokit/bsddev/IOKitBSDInit.cpp
+@@ -1539,6 +1539,12 @@ IOTaskHasEntitlement(task_t task, const char *entitlement)
+ 	if (task == kernel_task || entitlement == NULL) {
+ 		return false;
+ 	}
++#if defined(ARM64_BOARD_CONFIG_J8)
++	/* No AMFI kext on J8: there is no entitlements backend to query. */
++	if (amfi == NULL) {
++		return false;
++	}
++#endif
+ 	proc_t proc = (proc_t)get_bsdtask_info(task);
+ 
+ 	kern_return_t ret = amfi->OSEntitlements.queryEntitlementBooleanWithProc(
+@@ -1572,6 +1578,11 @@ IOTaskGetEntitlement(task_t task, const char *entitlement)
+ 	if (task == kernel_task || entitlement == NULL) {
+ 		return NULL;
+ 	}
++#if defined(ARM64_BOARD_CONFIG_J8)
++	if (amfi == NULL) {
++		return NULL;
++	}
++#endif
+ 	proc_t proc = (proc_t)get_bsdtask_info(task);
+ 
+ 	kern_return_t ret = amfi->OSEntitlements.copyEntitlementAsOSObjectWithProc(
