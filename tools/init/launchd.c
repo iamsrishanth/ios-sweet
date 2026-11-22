@@ -20,6 +20,9 @@
 #define SYS_getpid  20
 #define SYS_pipe    42
 
+typedef unsigned long long uint64_t;
+typedef unsigned int uint32_t;
+
 #define MACH_TRAP_PORT_ALLOCATE   (-16L)
 #define MACH_TRAP_PORT_INSERT     (-21L)
 #define MACH_TRAP_TASK_SELF       (-28L)
