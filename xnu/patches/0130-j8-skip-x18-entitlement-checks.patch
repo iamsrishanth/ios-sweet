@@ -1,0 +1,22 @@
+diff --git a/osfmk/arm64/machine_task.c b/osfmk/arm64/machine_task.c
+index 737f67f..0c6bb54 100644
+--- a/osfmk/arm64/machine_task.c
++++ b/osfmk/arm64/machine_task.c
+@@ -267,6 +267,17 @@ machine_task_process_signature(
+ {
+ 	assert(error_msg != NULL);
+ 
++#if defined(ARM64_BOARD_CONFIG_J8)
++	/*
++	 * J8 has no cs_blob/entitlements (no corecrypto or AMFI), so
++	 * IOTaskHasEntitlement() would fault. Skip the x18 checks entirely.
++	 */
++	(void)task;
++	(void)platform;
++	(void)sdk;
++	return KERN_SUCCESS;
++#endif
++
+ 	kern_return_t kr = KERN_SUCCESS;
+ 
+ 	bool const x18_entitled =
