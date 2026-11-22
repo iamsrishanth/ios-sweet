@@ -714,3 +714,20 @@ What it took today (in order): 0058 HID services (Apple IOHIDFamily-1915 user cl
 - Next: instrument `exec_mach_imgact`/`load_machfile` to print the failing
   `lret` (and which pass), or generate an LC_MAIN Mach-O with a matching
   4 GiB pagezero; then retry the boot.
+
+### Init static-exec milestone (2026-11-22, run 44968818697)
+
+- 0123: `enforce_hard_pagezero = FALSE` for J8.
+- 0125: panic with the `load_machfile` return; the value was **4
+  (LOAD_FAILURE)**.
+- Cause: RELEASE `parse_machfile` rejects non-dyld arm64 MH_EXECUTE
+  ("static executables disallowed except for development"). 0126 lets J8
+  through; the loader now loads the init.
+- 0127: `cs_blob_init_validated` computed a cdhash through the unregistered
+  corecrypto callbacks and faulted at NULL+0x30; J8 now leaves the cdhash
+  zeroed.
+- New state: init is accepted and runs far enough that the kernel faults in
+  `ubc_cs_blob_add+0x370` (LR) while attaching the init code signature.
+  Tested with the small-__PAGEZERO init from CI run 44951542230.
+- Next: bypass/skip the remaining cs_blob attach work for J8 (entitlements /
+  reconstitution / corecrypto), then observe the first user instruction.
