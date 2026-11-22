@@ -1,0 +1,13 @@
+diff --git a/bsd/kern/kern_exec.c b/bsd/kern/kern_exec.c
+index 5d92734..badb6f3 100644
+--- a/bsd/kern/kern_exec.c
++++ b/bsd/kern/kern_exec.c
+@@ -1317,7 +1317,7 @@ grade:
+ 	lret = load_machfile(imgp, mach_header, thread, &map, &load_result);
+ #if defined(ARM64_BOARD_CONFIG_J8)
+ 	if (lret != LOAD_SUCCESS) {
+-		printf("J8 init: load_machfile returned %d\n", lret);
++		panic("J8 init: load_machfile returned %d", lret);
+ 	}
+ #endif
+ 	if (lret != LOAD_SUCCESS) {
