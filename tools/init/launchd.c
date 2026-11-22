@@ -35,6 +35,26 @@ j8_syscall(long n, long a, long b, long c)
 	return x0;
 }
 
+struct syscall_pair {
+	long x0;
+	long x1;
+};
+
+static inline struct syscall_pair
+j8_syscall_pair(long n)
+{
+	register long x16 __asm__("x16") = n;
+	register long x0 __asm__("x0") = 0;
+	register long x1 __asm__("x1") = 0;
+
+	__asm__ volatile("svc #0x80"
+	    : "+r"(x0), "+r"(x1)
+	    : "r"(x16)
+	    : "memory");
+	struct syscall_pair result = {x0, x1};
+	return result;
+}
+
 static inline long
 j8_syscall4(long n, long a, long b, long c, long d)
 {
@@ -54,7 +74,11 @@ j8_syscall4(long n, long a, long b, long c, long d)
 static const char init_message[] = "J8 init: hello from userland\n";
 static const char child_message[] = "J8 init: fork child ran\n";
 static const char parent_message[] = "J8 init: parent reaped child\n";
+static const char pipe_create_message[] = "J8 init: pipe created\n";
+static const char pipe_write_message[] = "J8 init: pipe write ok\n";
+static const char pipe_read_message[] = "J8 init: pipe read ok\n";
 static const char pipe_message[] = "J8 init: pipe roundtrip ok\n";
+static const char pipe_fail_message[] = "J8 init: pipe test failed\n";
 
 void
 start(void)
@@ -89,17 +113,38 @@ start(void)
 
 	/* Exercise a kernel pipe and both read/write paths. */
 	int pipefd[2] = {-1, -1};
-	if (j8_syscall(SYS_pipe, (long)pipefd, 0, 0) == 0) {
+	struct syscall_pair pipe_pair = j8_syscall_pair(SYS_pipe);
+	long pipe_result = pipe_pair.x0;
+	if (pipe_result >= 0) {
+		pipefd[0] = (int)pipe_pair.x0;
+		pipefd[1] = (int)pipe_pair.x1;
+	}
+	if (pipe_result >= 0 && fd >= 0) {
+		(void)j8_syscall(SYS_write, fd, (long)pipe_create_message,
+		    sizeof(pipe_create_message) - 1);
+	}
+	if (pipe_result >= 0) {
 		static const char token[] = "j8-pipe";
 		char roundtrip[8] = {0};
-		(void)j8_syscall(SYS_write, pipefd[1], (long)token, sizeof(token) - 1);
+		long nw = j8_syscall(SYS_write, pipefd[1], (long)token, sizeof(token) - 1);
+		if (nw == (long)(sizeof(token) - 1) && fd >= 0) {
+			(void)j8_syscall(SYS_write, fd, (long)pipe_write_message,
+			    sizeof(pipe_write_message) - 1);
+		}
 		long nr = j8_syscall(SYS_read, pipefd[0], (long)roundtrip, sizeof(token) - 1);
+		if (nr == (long)(sizeof(token) - 1) && fd >= 0) {
+			(void)j8_syscall(SYS_write, fd, (long)pipe_read_message,
+			    sizeof(pipe_read_message) - 1);
+		}
 		(void)j8_syscall(SYS_close, pipefd[0], 0, 0);
 		(void)j8_syscall(SYS_close, pipefd[1], 0, 0);
 		if (nr == (long)(sizeof(token) - 1) && roundtrip[0] == 'j' && fd >= 0) {
 			(void)j8_syscall(SYS_write, fd, (long)pipe_message,
 			    sizeof(pipe_message) - 1);
 		}
+	} else if (fd >= 0) {
+		(void)j8_syscall(SYS_write, fd, (long)pipe_fail_message,
+		    sizeof(pipe_fail_message) - 1);
 	}
 
 	for (;;) {
