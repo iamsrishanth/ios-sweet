@@ -766,3 +766,17 @@ What it took today (in order): 0058 HID services (Apple IOHIDFamily-1915 user cl
 - Next: replace the proof init with a small userland supervisor that can make
   more syscalls, add `/dev` device nodes, and begin testing Mach IPC/process
   creation. No phone write is needed yet.
+
+### Fork/wait userland supervisor verified (2026-11-22, run 45042109101)
+
+- The minimal init now exercises `fork`, child `/dev/console` reopen/write,
+  `_exit(42)`, and parent `wait4`; the parent then remains resident in a
+  `getpid` syscall loop.
+- QEMU output shows `J8 init: hello from userland` followed by
+  `J8 init: parent reaped child`; the child message is not visible in the
+  circular framebuffer capture, but the parent message proves `wait4` returned
+  and the parent continued. The prior run captured the child path using the
+  inherited descriptor.
+- The 105-second capture had no panic. No J8 phone write is needed yet.
+- Next work can test Mach IPC or add a tiny static userland tool; hardware
+  driver work remains blocked on a real J8 boot and its device access.

@@ -28,7 +28,7 @@ evidence.
 | Partition map / storage type (eMMC, not UFS) | **hardware-verified** | live `/proc/partitions`, `/dev/block/by-name`, device tree |
 | Recovery path and rollback assets | **hardware-verified** *(historical Android use)* + documented | `INSTALL-RECOVERY.md` |
 | Page-size capability (`TGran16`) | **documented: no 16K** (unit confirmation failed) | Cortex-A53 r0p4 TRM `TGran16 = 0x0`; EL0 access is architecturally absent (SIGILL measured); the EL1 probe image was built and flashed but the **bootloader rejected it**, so no on-unit read exists |
-| XNU kernel built for J8 | **QEMU: first user process runs** | CI run **45037725697** (kernel55): HFS root mounts, `/dev` mountpoint is present, `/sbin/launchd` is loaded, and the init prints `J8 init: hello from userland`; GDB hits its infinite syscall loop at user PC `0x13fd0` after 120 s. No phone boot. |
+| XNU kernel built for J8 | **QEMU: fork/wait userland supervisor** | CI run **45042109101** (kernel57): HFS root and `/dev` mount, `/sbin/launchd` executes, initial userland message prints, child is forked/exits, and parent prints `J8 init: parent reaped child`; no panic during the 105-second capture. No phone boot. |
 | J8 shim (4 KiB granule MMU) | **researched** | `shim/mmu.c` is 16 KiB-only |
 | Anything booting on the J8 from this project | **QEMU only** | VM init complete; blocked by a NULL platform-expert object; nothing flashed since the rejected probe |
 
@@ -96,6 +96,7 @@ evidence.
 | 2026-11-22 06:44 UTC | Init static exec + cs_blob attach (run 44968818697) | RELEASE loader accepted a non-dyld arm64 init after 0126; cdhash corecrypto path skipped (0127); next fault in `ubc_cs_blob_add+0x370` | `evidence/qemu-2026-11-22-init-csblob-fault.png` |
 | 2026-11-22 17:10 UTC | No-panic init load attempt (run 45016227237) | 0128-0131 bypass cs_blob reconstitution, missing-blob panic, x18 checks and NULL AMFI entitlements; `load_init_program` no longer panics and the kernel idles | `evidence/qemu-2026-11-22-init-load-nopanic.png` |
 | 2026-11-22 21:35 UTC | First user process verified (run 45037725697) | Built-in SHA-256 fallback clears devfs mount fault; `/sbin/launchd` executes, writes `J8 init: hello from userland`, and GDB hits its syscall loop at `0x13fd0` | `evidence/qemu-2026-11-22-first-userland.png` |
+| 2026-11-22 21:35 UTC | Fork/wait supervisor verified (run 45042109101) | Parent init forked a child, wait4 reaped it, parent continued in its syscall loop; HFS/devfs and console paths remain live | `evidence/qemu-2026-11-22-fork-wait.png` |
 | - | Any J8 boot of XNU/iOS | not attempted: no GICv2 delivery, shim, device tree or drivers | - |
 
 ## 5. What this task implemented
