@@ -1,0 +1,32 @@
+diff --git a/bsd/kern/ubc_subr.c b/bsd/kern/ubc_subr.c
+index fdc5983..7ffd065 100644
+--- a/bsd/kern/ubc_subr.c
++++ b/bsd/kern/ubc_subr.c
+@@ -4616,6 +4616,27 @@ ubc_cs_blob_add(
+ 	kern_return_t kr = KERN_DENIED;
+ 	errno_t error = -1;
+ 
++#if defined(ARM64_BOARD_CONFIG_J8)
++	/*
++	 * J8 has no corecrypto, AMFI or entitlements backend. Reconstitution and
++	 * the MAC signature checks fault without it, and enforcement is disabled
++	 * for bring-up, so accept the image without attaching a blob.
++	 */
++	if (ret_blob) {
++		*ret_blob = NULL;
++	}
++	(void)vp;
++	(void)platform;
++	(void)cputype;
++	(void)cpusubtype;
++	(void)base_offset;
++	(void)addr;
++	(void)size;
++	(void)imgp;
++	(void)flags;
++	return 0;
++#endif
++
+ #if HAS_APPLE_PAC
+ 	void *signed_entitlements = NULL;
+ #if CODE_SIGNING_MONITOR
