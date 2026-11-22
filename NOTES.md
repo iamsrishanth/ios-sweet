@@ -797,3 +797,19 @@ What it took today (in order): 0058 HID services (Apple IOHIDFamily-1915 user cl
 - No physical J8 access has occurred in this round. The remaining target
   features (storage/display/GPU/Wi-Fi/Bluetooth/modem) require hardware or
   dedicated emulation and are not claimed from this QEMU syscall evidence.
+
+### Mach IPC verified (2026-11-23, run 45064489585)
+
+- Legacy `mach_msg_trap` (-31) is rejected for embedded/platform binaries
+  (`mach_msg_legacy_allowed`) and the rejection path panicked in commpage pmap
+  teardown. The probe now uses `mach_msg2` (-47).
+- `mach_msg2` argument packing fixed twice:
+  - `desc_count_and_rcv_name`: receive port is the **high** 32 bits.
+  - The CFI option `MACH64_SEND_MQ_CALL` plus `MACH64_MACH_MSG2` must be set.
+- Verified sequence now printed in QEMU: hello, parent reaped child, pipe
+  created/write/read/roundtrip, `mach port allocated`, `mach ipc roundtrip ok`.
+- That exercises a receive right, `mach_port_insert_right`, a send+receive of a
+  small message with an id, and user-memory round trip.
+- Kernel63 SHA-256 `736727ee167acf39a56cd17c5eedb8eeef470064145d7586bfc90063dce7cec4`.
+- Next QEMU work: bootstrap port lookup or exception-port setup; hardware
+  drivers remain blocked on a real J8 boot.
