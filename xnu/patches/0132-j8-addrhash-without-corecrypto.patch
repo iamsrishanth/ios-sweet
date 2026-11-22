@@ -1,0 +1,20 @@
+diff --git a/osfmk/vm/vm_kern.c b/osfmk/vm/vm_kern.c
+index c8190ff..78f2b36 100644
+--- a/osfmk/vm/vm_kern.c
++++ b/osfmk/vm/vm_kern.c
+@@ -4117,6 +4117,15 @@ vm_kernel_addrhash_internal(vm_offset_t addr, uint64_t salt)
+ 		return VM_KERNEL_UNSLIDE(addr);
+ 	}
+ 
++#if defined(ARM64_BOARD_CONFIG_J8)
++	/*
++	 * J8 has no corecrypto registration. This hash is only for obscuring
++	 * kernel addresses; use a deterministic non-cryptographic mix so VFS
++	 * mount setup does not call NULL SHA256 callbacks.
++	 */
++	return (addr ^ salt) * 0x9e3779b97f4a7c15ULL;
++#endif
++
+ 	vm_offset_t sha_digest[SHA256_DIGEST_LENGTH / sizeof(vm_offset_t)];
+ 	SHA256_CTX sha_ctx;
+ 
