@@ -1,0 +1,23 @@
+diff --git a/bsd/kern/mach_loader.c b/bsd/kern/mach_loader.c
+index 06a39b9..100079c 100644
+--- a/bsd/kern/mach_loader.c
++++ b/bsd/kern/mach_loader.c
+@@ -3540,6 +3540,18 @@ load_code_signature(
+ 	ret = LOAD_SUCCESS;
+ out:
+ 	if (ret == LOAD_SUCCESS) {
++#if defined(ARM64_BOARD_CONFIG_J8)
++		/*
++		 * J8 accepts images without attaching a cs_blob (no corecrypto or
++		 * AMFI); there are no blob flags to propagate.
++		 */
++		if (blob == NULL) {
++			if (addr != 0) {
++				ubc_cs_blob_deallocate(addr, blob_size);
++			}
++			return LOAD_SUCCESS;
++		}
++#endif
+ 		if (blob == NULL) {
+ 			panic("success, but no blob!");
+ 		}
