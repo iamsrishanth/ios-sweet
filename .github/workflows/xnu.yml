@@ -164,7 +164,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/mnt"
           hdiutil attach -imagekey diskimage-class=CRawDiskImage \
             -mountpoint "$RUNNER_TEMP/mnt" "$RUNNER_TEMP/root.hfs"
-          mkdir -p "$RUNNER_TEMP/mnt/sbin"
+          mkdir -p "$RUNNER_TEMP/mnt/sbin" "$RUNNER_TEMP/mnt/dev"
           cp "$RUNNER_TEMP/rootdir/sbin/launchd" "$RUNNER_TEMP/mnt/sbin/launchd"
           hdiutil detach "$RUNNER_TEMP/mnt"
           ls -l "$RUNNER_TEMP/root.hfs"
