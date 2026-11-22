@@ -20,6 +20,16 @@
 #define SYS_getpid  20
 #define SYS_pipe    42
 
+#define MACH_TRAP_PORT_ALLOCATE   (-16L)
+#define MACH_TRAP_PORT_INSERT     (-21L)
+#define MACH_TRAP_TASK_SELF       (-28L)
+#define MACH_TRAP_MSG             (-31L)
+#define MACH_PORT_RIGHT_RECEIVE   1L
+#define MACH_MSG_TYPE_COPY_SEND   19U
+#define MACH_MSG_TYPE_MAKE_SEND   20L
+#define MACH_SEND_MSG              1L
+#define MACH_RCV_MSG               2L
+
 static inline long
 j8_syscall(long n, long a, long b, long c)
 {
@@ -79,6 +89,70 @@ static const char pipe_write_message[] = "J8 init: pipe write ok\n";
 static const char pipe_read_message[] = "J8 init: pipe read ok\n";
 static const char pipe_message[] = "J8 init: pipe roundtrip ok\n";
 static const char pipe_fail_message[] = "J8 init: pipe test failed\n";
+static const char mach_port_message[] = "J8 init: mach port allocated\n";
+static const char mach_ipc_message[] = "J8 init: mach ipc roundtrip ok\n";
+static const char mach_fail_message[] = "J8 init: mach ipc test failed\n";
+
+struct mach_msg_header {
+	unsigned int bits;
+	unsigned int size;
+	unsigned int remote;
+	unsigned int local;
+	unsigned int voucher;
+	int id;
+};
+
+struct mach_probe_message {
+	struct mach_msg_header header;
+	char payload[16];
+};
+
+static inline long
+j8_mach_trap3(long trap, long a, long b, long c)
+{
+	register long x16 __asm__("x16") = trap;
+	register long x0 __asm__("x0") = a;
+	register long x1 __asm__("x1") = b;
+	register long x2 __asm__("x2") = c;
+	__asm__ volatile("svc #0x80"
+	    : "+r"(x0)
+	    : "r"(x16), "r"(x1), "r"(x2)
+	    : "memory");
+	return x0;
+}
+
+static inline long
+j8_mach_trap4(long trap, long a, long b, long c, long d)
+{
+	register long x16 __asm__("x16") = trap;
+	register long x0 __asm__("x0") = a;
+	register long x1 __asm__("x1") = b;
+	register long x2 __asm__("x2") = c;
+	register long x3 __asm__("x3") = d;
+	__asm__ volatile("svc #0x80"
+	    : "+r"(x0)
+	    : "r"(x16), "r"(x1), "r"(x2), "r"(x3)
+	    : "memory");
+	return x0;
+}
+
+static inline long
+j8_mach_trap7(long trap, long a, long b, long c, long d, long e, long f, long g)
+{
+	register long x16 __asm__("x16") = trap;
+	register long x0 __asm__("x0") = a;
+	register long x1 __asm__("x1") = b;
+	register long x2 __asm__("x2") = c;
+	register long x3 __asm__("x3") = d;
+	register long x4 __asm__("x4") = e;
+	register long x5 __asm__("x5") = f;
+	register long x6 __asm__("x6") = g;
+	__asm__ volatile("svc #0x80"
+	    : "+r"(x0)
+	    : "r"(x16), "r"(x1), "r"(x2), "r"(x3), "r"(x4), "r"(x5), "r"(x6)
+	    : "memory");
+	return x0;
+}
 
 void
 start(void)
@@ -145,6 +219,38 @@ start(void)
 	} else if (fd >= 0) {
 		(void)j8_syscall(SYS_write, fd, (long)pipe_fail_message,
 		    sizeof(pipe_fail_message) - 1);
+	}
+
+	/* Exercise the basic Mach port and same-task message path. */
+	unsigned int self = (unsigned int)j8_mach_trap3(MACH_TRAP_TASK_SELF, 0, 0, 0);
+	unsigned int port = 0;
+	long kr = j8_mach_trap3(MACH_TRAP_PORT_ALLOCATE, self,
+	    MACH_PORT_RIGHT_RECEIVE, (long)&port);
+	if (kr == 0 && fd >= 0) {
+		(void)j8_syscall(SYS_write, fd, (long)mach_port_message,
+		    sizeof(mach_port_message) - 1);
+	}
+	if (kr == 0) {
+		(void)j8_mach_trap4(MACH_TRAP_PORT_INSERT, self, port,
+		    port, MACH_MSG_TYPE_MAKE_SEND);
+		struct mach_probe_message sent = {
+			.header = {MACH_MSG_TYPE_COPY_SEND, sizeof(sent.header) + 8,
+			    port, 0, 0, 0x4a38},
+			.payload = "j8-mach"
+		};
+		struct mach_probe_message received = {{0}, {0}};
+		long send_result = j8_mach_trap7(MACH_TRAP_MSG, (long)&sent,
+		    MACH_SEND_MSG, sent.header.size, 0, 0, 0, 0);
+		long receive_result = j8_mach_trap7(MACH_TRAP_MSG, (long)&received,
+		    MACH_RCV_MSG, 0, sizeof(received), port, 0, 0);
+		if (send_result == 0 && receive_result == 0 &&
+		    received.header.id == 0x4a38 && received.payload[0] == 'j' && fd >= 0) {
+			(void)j8_syscall(SYS_write, fd, (long)mach_ipc_message,
+			    sizeof(mach_ipc_message) - 1);
+		} else if (fd >= 0) {
+			(void)j8_syscall(SYS_write, fd, (long)mach_fail_message,
+			    sizeof(mach_fail_message) - 1);
+		}
 	}
 
 	for (;;) {
