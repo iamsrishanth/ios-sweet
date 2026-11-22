@@ -23,6 +23,7 @@
 #define MACH_TRAP_PORT_ALLOCATE   (-16L)
 #define MACH_TRAP_PORT_INSERT     (-21L)
 #define MACH_TRAP_TASK_SELF       (-28L)
+#define MACH_TRAP_MSG2            (-47L)
 #define MACH_TRAP_MSG             (-31L)
 #define MACH_PORT_RIGHT_RECEIVE   1L
 #define MACH_MSG_TYPE_COPY_SEND   19U
@@ -30,7 +31,9 @@
 #define MACH_MSGH_BITS(remote, local) ((remote) | ((local) << 8))
 #define MACH_SEND_MSG              1L
 #define MACH_RCV_MSG               2L
-#define MACH_RCV_TIMEOUT           0x00000010L
+#define MACH64_MACH_MSG2           0x8000000000000000ULL
+#define MACH64_SEND_MQ_CALL        0x0000000400000000ULL
+#define MACH_RCV_TIMEOUT           0x00000100L
 #define KERN_SUCCESS               0L
 
 static inline long
@@ -140,6 +143,25 @@ j8_mach_trap4(long trap, long a, long b, long c, long d)
 }
 
 static inline long
+j8_mach_trap8(long trap, long a, long b, long c, long d, long e, long f, long g, long h)
+{
+	register long x16 __asm__("x16") = trap;
+	register long x0 __asm__("x0") = a;
+	register long x1 __asm__("x1") = b;
+	register long x2 __asm__("x2") = c;
+	register long x3 __asm__("x3") = d;
+	register long x4 __asm__("x4") = e;
+	register long x5 __asm__("x5") = f;
+	register long x6 __asm__("x6") = g;
+	register long x7 __asm__("x7") = h;
+	__asm__ volatile("svc #0x80"
+	    : "+r"(x0)
+	    : "r"(x16), "r"(x1), "r"(x2), "r"(x3), "r"(x4), "r"(x5), "r"(x6), "r"(x7)
+	    : "memory");
+	return x0;
+}
+
+static inline long
 j8_mach_trap7(long trap, long a, long b, long c, long d, long e, long f, long g)
 {
 	register long x16 __asm__("x16") = trap;
@@ -242,10 +264,24 @@ start(void)
 			.payload = "j8-mach"
 		};
 		struct mach_probe_message received = {{0}, {0}};
-		long send_result = j8_mach_trap7(MACH_TRAP_MSG, (long)&sent,
-		    MACH_SEND_MSG, sent.header.size, 0, 0, 0, 0);
-		long receive_result = j8_mach_trap7(MACH_TRAP_MSG, (long)&received,
-		    MACH_RCV_MSG | MACH_RCV_TIMEOUT, 0, sizeof(received), port, 1, 0);
+		uint64_t send_bits_size = ((uint64_t)sent.header.size << 32) | sent.header.bits;
+		uint64_t send_ports = (uint64_t)port;
+		uint64_t send_voucher_id = ((uint64_t)(uint32_t)sent.header.id << 32);
+		uint64_t send_desc_rcv = 0;
+		uint64_t send_rcv_pri = 0;
+		long send_result = j8_mach_trap8(MACH_TRAP_MSG2, (long)&sent,
+		    MACH_SEND_MSG | MACH64_MACH_MSG2 | MACH64_SEND_MQ_CALL, (long)send_bits_size,
+		    (long)send_ports, (long)send_voucher_id, (long)send_desc_rcv,
+		    (long)send_rcv_pri, 0);
+		uint64_t recv_bits_size = (uint64_t)sizeof(received) << 32;
+		uint64_t recv_ports = (uint64_t)port << 32;
+		uint64_t recv_voucher_id = 0;
+		uint64_t recv_desc_rcv = (uint64_t)port;
+		uint64_t recv_rcv_pri = (uint64_t)sizeof(received);
+		long receive_result = j8_mach_trap8(MACH_TRAP_MSG2, (long)&received,
+		    MACH_RCV_MSG | MACH_RCV_TIMEOUT | MACH64_MACH_MSG2 | MACH64_SEND_MQ_CALL,
+		    (long)recv_bits_size, (long)recv_ports, (long)recv_voucher_id,
+		    (long)recv_desc_rcv, (long)recv_rcv_pri, 1);
 		if (insert_result == KERN_SUCCESS && send_result == KERN_SUCCESS && receive_result == KERN_SUCCESS &&
 		    received.header.id == 0x4a38 && received.payload[0] == 'j' && fd >= 0) {
 			(void)j8_syscall(SYS_write, fd, (long)mach_ipc_message,
