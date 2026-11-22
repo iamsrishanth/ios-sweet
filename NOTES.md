@@ -780,3 +780,20 @@ What it took today (in order): 0058 HID services (Apple IOHIDFamily-1915 user cl
 - The 105-second capture had no panic. No J8 phone write is needed yet.
 - Next work can test Mach IPC or add a tiny static userland tool; hardware
   driver work remains blocked on a real J8 boot and its device access.
+
+### Pipe/read/write/close syscalls verified (2026-11-22, run 45046446734)
+
+- The first pipe test exposed an ABI mistake: Darwin's `pipe` syscall has no
+  user pointer argument and returns the read/write descriptors in `x0`/`x1`.
+- The corrected init captures both return registers, writes `j8-pipe`, reads it
+  back, validates the first byte, closes both descriptors, and remains resident.
+- QEMU output now shows:
+  `J8 init: pipe created`
+  `J8 init: pipe write ok`
+  `J8 init: pipe read ok`
+  `J8 init: pipe roundtrip ok`
+- This confirms pipe allocation, descriptor return ABI, kernel pipe write/read,
+  close, user-memory copyout/copyin, and parent continuation on the J8 kernel.
+- No physical J8 access has occurred in this round. The remaining target
+  features (storage/display/GPU/Wi-Fi/Bluetooth/modem) require hardware or
+  dedicated emulation and are not claimed from this QEMU syscall evidence.
