@@ -1,0 +1,13 @@
+diff --git a/bsd/kern/mach_loader.c b/bsd/kern/mach_loader.c
+index 1756185..c051e27 100644
+--- a/bsd/kern/mach_loader.c
++++ b/bsd/kern/mach_loader.c
+@@ -863,7 +863,7 @@ parse_machfile(
+ #endif /* CONFIG_X86_64_COMPAT */
+ 		} else {
+ 			/* Check properties of static executables (disallowed except for development) */
+-#if !(DEVELOPMENT || DEBUG)
++#if !(DEVELOPMENT || DEBUG) && !defined(ARM64_BOARD_CONFIG_J8)
+ 			return LOAD_FAILURE;
+ #endif
+ 		}
