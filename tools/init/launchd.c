@@ -12,10 +12,13 @@
 
 #define SYS_exit    1
 #define SYS_fork    2
+#define SYS_read    3
 #define SYS_wait4   7
 #define SYS_write   4
 #define SYS_open    5
+#define SYS_close   6
 #define SYS_getpid  20
+#define SYS_pipe    42
 
 static inline long
 j8_syscall(long n, long a, long b, long c)
@@ -51,6 +54,7 @@ j8_syscall4(long n, long a, long b, long c, long d)
 static const char init_message[] = "J8 init: hello from userland\n";
 static const char child_message[] = "J8 init: fork child ran\n";
 static const char parent_message[] = "J8 init: parent reaped child\n";
+static const char pipe_message[] = "J8 init: pipe roundtrip ok\n";
 
 void
 start(void)
@@ -80,6 +84,21 @@ start(void)
 		if (fd >= 0) {
 			(void)j8_syscall(SYS_write, fd, (long)parent_message,
 			    sizeof(parent_message) - 1);
+		}
+	}
+
+	/* Exercise a kernel pipe and both read/write paths. */
+	int pipefd[2] = {-1, -1};
+	if (j8_syscall(SYS_pipe, (long)pipefd, 0, 0) == 0) {
+		static const char token[] = "j8-pipe";
+		char roundtrip[8] = {0};
+		(void)j8_syscall(SYS_write, pipefd[1], (long)token, sizeof(token) - 1);
+		long nr = j8_syscall(SYS_read, pipefd[0], (long)roundtrip, sizeof(token) - 1);
+		(void)j8_syscall(SYS_close, pipefd[0], 0, 0);
+		(void)j8_syscall(SYS_close, pipefd[1], 0, 0);
+		if (nr == (long)(sizeof(token) - 1) && roundtrip[0] == 'j' && fd >= 0) {
+			(void)j8_syscall(SYS_write, fd, (long)pipe_message,
+			    sizeof(pipe_message) - 1);
 		}
 	}
 
