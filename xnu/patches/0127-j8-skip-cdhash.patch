@@ -1,0 +1,25 @@
+diff --git a/bsd/kern/ubc_subr.c b/bsd/kern/ubc_subr.c
+index 9b553be..fdc5983 100644
+--- a/bsd/kern/ubc_subr.c
++++ b/bsd/kern/ubc_subr.c
+@@ -4023,9 +4023,20 @@ cs_blob_init_validated(
+ 		md_base = (const unsigned char *) cd;
+ 		md_size = ntohl(cd->length);
+ 
++#if defined(ARM64_BOARD_CONFIG_J8)
++		/*
++		 * J8 has no corecrypto backend: the cs_hash callbacks are
++		 * unregistered (NULL), so computing a cdhash faults in the kernel.
++		 * The cdhash is only an identifier here, so leave it zeroed.
++		 */
++		(void)md_base;
++		(void)md_size;
++		bzero(hash, sizeof(hash));
++#else
+ 		blob->csb_hashtype->cs_init(&mdctx);
+ 		blob->csb_hashtype->cs_update(&mdctx, md_base, md_size);
+ 		blob->csb_hashtype->cs_final(hash, &mdctx);
++#endif
+ 
+ 		memcpy(blob->csb_cdhash, hash, CS_CDHASH_LEN);
+ 
