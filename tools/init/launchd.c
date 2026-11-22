@@ -277,9 +277,9 @@ start(void)
 		    (long)send_ports, (long)send_voucher_id, (long)send_desc_rcv,
 		    (long)send_rcv_pri, 0);
 		uint64_t recv_bits_size = (uint64_t)sizeof(received) << 32;
-		uint64_t recv_ports = (uint64_t)port << 32;
+		uint64_t recv_ports = 0;
 		uint64_t recv_voucher_id = 0;
-		uint64_t recv_desc_rcv = (uint64_t)port;
+		uint64_t recv_desc_rcv = (uint64_t)port << 32;
 		uint64_t recv_rcv_pri = (uint64_t)sizeof(received);
 		long receive_result = j8_mach_trap8(MACH_TRAP_MSG2, (long)&received,
 		    MACH_RCV_MSG | MACH_RCV_TIMEOUT | MACH64_MACH_MSG2 | MACH64_SEND_MQ_CALL,
