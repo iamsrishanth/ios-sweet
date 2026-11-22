@@ -731,3 +731,20 @@ What it took today (in order): 0058 HID services (Apple IOHIDFamily-1915 user cl
   Tested with the small-__PAGEZERO init from CI run 44951542230.
 - Next: bypass/skip the remaining cs_blob attach work for J8 (entitlements /
   reconstitution / corecrypto), then observe the first user instruction.
+
+### No-panic init load attempt (2026-11-22, run 45016227237)
+
+- 0128: `ubc_cs_blob_add` accepted images without a blob on J8.
+- 0129: `load_code_signature` tolerates the missing blob (no more "success,
+  but no blob!" panic).
+- 0130: skip x18 entitlement checks in `machine_task_process_signature`.
+- 0131: guard `IOTaskHasEntitlement`/`IOTaskGetEntitlement` when `amfi` is NULL
+  (deref faulted at offset 0x180).
+- Result with the small-pagezero init: root mounts, `devfs_kernel_mount` fails
+  with 2, and the console shows `load_init_program: attempting to load
+  /sbin/launchd` with **no panic** for 105+ s. QMP `info registers` at 120 s
+  shows the kernel idle path (`0xfffffff007346f04`), so pid 1 is either blocked
+  or in a syscall; it does not yet print anything.
+- Next: attach gdb to the running kernel and inspect `_initproc`/its thread
+  (blocked in exec? sleeping in getpid?), and fix devfs mounting so
+  /dev/console exists.
