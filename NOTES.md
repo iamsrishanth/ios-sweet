@@ -748,3 +748,21 @@ What it took today (in order): 0058 HID services (Apple IOHIDFamily-1915 user cl
 - Next: attach gdb to the running kernel and inspect `_initproc`/its thread
   (blocked in exec? sleeping in getpid?), and fix devfs mounting so
   /dev/console exists.
+
+### First user process verified (2026-11-22, run 45037725697)
+
+- 0132 fixed the devfs mount's address-hash path, but another SHA256 call still
+  faulted. 0133 selects SWEET's existing built-in SHA256 implementation for J8
+  too; devfs then mounts successfully (the HFS image includes `/dev`).
+- QEMU screen now shows:
+  `hfs: mounted J8 on device b(1, 0)`
+  `load_init_program: attempting to load /sbin/launchd`
+  `J8 init: hello from userland`
+- A 120-second run produced no panic. GDB independently connected to the running
+  guest after 25 seconds and hit hardware breakpoint `0x13fd0`, the init's
+  `b 0x13fc4` loop after `getpid`; registers show `pc=0x13fd0`, `sp=0x16fdffe80`,
+  `x16=20` (getpid syscall). This proves the first user process executes and
+  remains alive; it is not just a kernel log.
+- Next: replace the proof init with a small userland supervisor that can make
+  more syscalls, add `/dev` device nodes, and begin testing Mach IPC/process
+  creation. No phone write is needed yet.
