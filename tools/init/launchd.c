@@ -65,8 +65,10 @@ start(void)
 	/* Exercise process creation and wait/reap before remaining resident. */
 	long child = j8_syscall(SYS_fork, 0, 0, 0);
 	if (child == 0) {
-		if (fd >= 0) {
-			(void)j8_syscall(SYS_write, fd, (long)child_message,
+		/* Re-open in the child so this also tests post-fork fd setup. */
+		long child_fd = j8_syscall(SYS_open, (long)"/dev/console", 1, 0);
+		if (child_fd >= 0) {
+			(void)j8_syscall(SYS_write, child_fd, (long)child_message,
 			    sizeof(child_message) - 1);
 		}
 		(void)j8_syscall(SYS_exit, 42, 0, 0);
