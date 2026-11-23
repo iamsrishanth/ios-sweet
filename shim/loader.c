@@ -13,7 +13,11 @@
 #include "loader.h"
 
 #define BOOT_LINE_LENGTH	608
+#ifdef J8_4K
+#define PAGE_16K		0x1000UL
+#else
 #define PAGE_16K		0x4000UL
+#endif
 
 struct payload_seg {
 	uint64_t vmaddr, vmsize, file_off, file_size;

@@ -92,8 +92,15 @@ This proves the 4 KiB-granule machine config **compiles and links** against
 xnu-8796.101.5 with the ios-sweet component set. It does **not** prove the
 kernel boots: GICv2 interrupt delivery is absent (`pexpert/arm/pe_fiq.c` has
 only the GICv3 path), and there are no J8 storage, display, touch or USB
-drivers, no 4 KiB shim and no device tree. The build is a compile milestone,
-not a bootable artifact.
+drivers, no J8 hardware boot image and no J8 device tree. The build is a
+compile milestone, not a bootable artifact.
+
+The shim now has an explicitly selected `J8_4K` geometry (`PG_SHIFT=12`, 2 MiB
+blocks, 4 KiB TG0/TG1, and 4 KiB payload placement). It is source-validated but
+not yet cross-compiled in this Windows workspace because the repository's
+Linux shim build requires WSL/aarch64-linux-gnu tooling. The phone is Samsung
+Download/Odin-only, not fastboot; therefore a hardware test would be a
+persistent `boot` write, not a temporary boot.
 
 The runs needed patches 0082-0087 (machine config; Xcode 16 `IORPC.kernelContent`
 backport; iOS user-VA limit for the 4 KiB commpage; staging the ios-sweet

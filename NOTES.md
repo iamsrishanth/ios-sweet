@@ -1,6 +1,28 @@
 # iOS 16 on sweet (Redmi Note 10 Pro, SM7150) - working notes
 
-## J8 handoff (2026-11-17) - Samsung Galaxy J8, branch `samsung-j8-bringup`
+## J8 handoff (2026-11-23) - Samsung Galaxy J8, branch `samsung-j8-bringup`
+
+**Connected-device inspection completed without a phone state change.** ADB
+serial `a7d468a5` identifies `SM-J810G` / `j8y18lte`, bootloader
+`J810GDDU6CWH2`, Android 11, Linux 3.18.140, eight Cortex-A53 r0p4 CPUs,
+3,627,816 KiB RAM, eMMC `mmcblk0`, and `/dev/kgsl-3d0` (major 235),
+`/dev/wcnss_wlan`, I2C nodes, input nodes, and modem/audio device classes.
+The SIM is absent. Facts are in local untracked
+`work/j8-adb-facts-20261123.txt` and `work/j8-driver-facts-20261123.txt`;
+these contain device-specific output and are intentionally not committed.
+
+The host has **no Samsung fastboot device**; the phone is Android/ADB only.
+J8 documentation confirms Samsung Download/Odin/thor rather than fastboot, so
+there is no safe `fastboot boot` path. No phone command changed state and no
+partition was read or written by block I/O. The next hardware experiment would
+be a persistent `boot` write through TWRP/Odin and requires explicit per-operation
+approval after a rollback image and test image are prepared.
+
+Source-only progress: `shim/mmu.c` has a `J8_4K` variant (4 KiB pages, 2 MiB
+blocks, 4 KiB TCR and loader alignment); source validation passed, but WSL is
+not available for the cross-build in this workspace. This is not hardware
+verified.
+
 
 **This is a feasibility/bring-up branch, not a working port.** One diagnostic
 image was flashed to `boot` and was **rejected by the bootloader**. The J8 XNU

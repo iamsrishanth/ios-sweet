@@ -29,7 +29,7 @@ evidence.
 | Recovery path and rollback assets | **hardware-verified** *(historical Android use)* + documented | `INSTALL-RECOVERY.md` |
 | Page-size capability (`TGran16`) | **documented: no 16K** (unit confirmation failed) | Cortex-A53 r0p4 TRM `TGran16 = 0x0`; EL0 access is architecturally absent (SIGILL measured); the EL1 probe image was built and flashed but the **bootloader rejected it**, so no on-unit read exists |
 | XNU kernel built for J8 | **QEMU: Mach IPC verified** | CI run **45064489585** (kernel63): HFS root, devfs, fork/wait and pipe tests pass; init allocates a Mach receive right, inserts a send right, sends and receives a message through `mach_msg2`, and prints `J8 init: mach ipc roundtrip ok`. No phone boot. |
-| J8 shim (4 KiB granule MMU) | **researched** | `shim/mmu.c` is 16 KiB-only |
+| J8 shim (4 KiB granule MMU) | **implemented-untested** | `shim/mmu.c` now has a `J8_4K` build path: 4 KiB pages, 2 MiB blocks, 4 KiB TCR and payload alignment; source validation passed, cross-build and hardware boot remain undone |
 | Anything booting on the J8 from this project | **QEMU only** | VM init complete; blocked by a NULL platform-expert object; nothing flashed since the rejected probe |
 
 ## 3. Feature matrix

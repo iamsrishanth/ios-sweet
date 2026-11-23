@@ -14,11 +14,19 @@
 #include <stdint.h>
 #include "mmu.h"
 
+#ifndef J8_4K
 #define PG_SHIFT	14
 #define PG_SIZE		(1UL << PG_SHIFT)		/* 16K */
 #define BLK_SHIFT	25
 #define BLK_SIZE	(1UL << BLK_SHIFT)		/* 32MB level-2 block */
 #define NENT		2048
+#else
+#define PG_SHIFT	12
+#define PG_SIZE		(1UL << PG_SHIFT)		/* 4K */
+#define BLK_SHIFT	21
+#define BLK_SIZE	(1UL << BLK_SHIFT)		/* 2MB level-2 block */
+#define NENT		512
+#endif
 
 #define ATTR_DEV	0	/* MAIR attr0 = 0x00 Device-nGnRnE */
 #define ATTR_WB		1	/* MAIR attr1 = 0xff Normal WB RW-alloc */
@@ -39,9 +47,15 @@
 #define WB_FLAGS	(D_ATTR(ATTR_WB) | D_SH_INNER | D_AF | D_UXN)
 #define NC_FLAGS	(D_ATTR(ATTR_NC) | D_SH_OUTER | D_AF | D_PXN | D_UXN)
 
-/* TCR: T0SZ=28, IRGN0/ORGN0=WBWA, SH0=inner, TG0=16K, EPD1, TG1=16K, IPS=36 bit */
+#ifdef J8_4K
+/* T0SZ=25, 4K TG0/TG1, IRGN0/ORGN0=WBWA, SH0=inner, IPS=36 bit. */
+#define TCR_VAL		(25UL | (1UL << 8) | (1UL << 10) | (0UL << 14) | (1UL << 23) | \
+			 (25UL << 16) | (1UL << 30) | (1UL << 32))
+#else
+/* T0SZ=28, IRGN0/ORGN0=WBWA, SH0=inner, TG0=16K, EPD1, TG1=16K, IPS=36 bit */
 #define TCR_VAL		(28UL | (1UL << 8) | (1UL << 10) | (3UL << 12) | (2UL << 14) | \
 			 (28UL << 16) | (1UL << 23) | (1UL << 30) | (1UL << 32))
+#endif
 
 #define SCTLR_M		(1UL << 0)
 #define SCTLR_A		(1UL << 1)
