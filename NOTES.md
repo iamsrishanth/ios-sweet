@@ -23,6 +23,41 @@ blocks, 4 KiB TCR and loader alignment); source validation passed, but WSL is
 not available for the cross-build in this workspace. This is not hardware
 verified.
 
+### Round 1 (after `e144bfd`): J8 ADT, shim image and stage-1 boot image prepared
+
+All of this ran on the host; no phone command was issued in this round.
+
+- Cross-compiled the 4 KiB shim locally with the bundled Windows
+  `aarch64-none-elf` GCC 13.3 (WSL is unavailable):
+  `work/j8-shim4k/Image`, 131,072 bytes, SHA-256
+  `a27105fa298b633d23abe04f977929bf2781b3d14a6fdaa12c04c6a2d4f9a8a3`.
+  `shim/console.h` now carries the J8 display constants under `J8_4K`
+  (`0x90001000`, 720x1480, stride 2880).
+- Added `tools/mkadt.py --j8`, built from measured values:
+  - GICv2 `0x0b000000`/`0x0b002000` (4 KiB each, stock boot FDT
+    `/soc/interrupt-controller@b000000`);
+  - virtual timer INTID 19; framebuffer `0x90001000` size `0x13ff000`
+    (`/reserved-memory/splash_region@0x90001000`);
+  - DDR banks read from the live `/proc/device-tree/memory/reg`:
+    `0x80000000+2 GiB` and `0x10000000+1.75 GiB` — the old `--highmem`
+    constant `0x100000000` **does not exist on this phone**;
+  - kernel RAM `0x9a000000` size `0x66000000`, above the highest fixed
+    carve-out (`modem_shared_mem_region` ends at `0x99000000`).
+- `work/prepare_j8_payload.py` and `work/assemble_j8_boot.py` (untracked;
+  they use the private stock image) produce a stage-1 Samsung v0 image:
+  kernel = `gzip(shim)` + stock DTB (gzip roundtrip and DTB equality
+  verified), ramdisk = `SWEETXNU` payload at the free `0x99000000` window,
+  header copied from `boot-stock.img`, no AVB/`SEANDROIDENFORCE`.
+  Image: 11,665,408 bytes, SHA-256
+  `bb135659d62547e100fe36b7bb17659838e9b00a84c3bc3cbead780bda7a38af`.
+- Rollback verified by extraction: `work/j8-probe/j8-boot-rollback.tar`
+  holds `boot.img` `111aa3ed0a5191ada9e1b32aa7ed82d495f27df2ab67561415c58ca2b873a2ab`.
+- **Battery was 7 % (charging) at inspection time.** Do not write `boot`
+  until it is above 50 %.
+- Not done, on purpose: nothing was written, no reboot, no Download Mode,
+  no `fastboot`/Odin command. Stage-1 is unproven on hardware; the shim's
+  GICv2 and MMU paths and the XNU eMMC/root stack are still missing.
+
 
 **This is a feasibility/bring-up branch, not a working port.** One diagnostic
 image was flashed to `boot` and was **rejected by the bootloader**. The J8 XNU

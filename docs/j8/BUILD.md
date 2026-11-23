@@ -96,11 +96,48 @@ drivers, no J8 hardware boot image and no J8 device tree. The build is a
 compile milestone, not a bootable artifact.
 
 The shim now has an explicitly selected `J8_4K` geometry (`PG_SHIFT=12`, 2 MiB
-blocks, 4 KiB TG0/TG1, and 4 KiB payload placement). It is source-validated but
-not yet cross-compiled in this Windows workspace because the repository's
-Linux shim build requires WSL/aarch64-linux-gnu tooling. The phone is Samsung
-Download/Odin-only, not fastboot; therefore a hardware test would be a
-persistent `boot` write, not a temporary boot.
+blocks, 4 KiB TG0/TG1, and 4 KiB payload placement), plus J8 display constants
+taken from the stock boot FDT (`FB_BASE 0x90001000`, 720x1480, stride 2880).
+It cross-compiles locally with the Windows `aarch64-none-elf` toolchain
+(131,072-byte `Image`). The phone is Samsung Download/Odin-only, not fastboot;
+therefore a hardware test would be a persistent `boot` write, not a temporary
+boot.
+
+### J8-specific ADT and boot image (prepared, not flashed)
+
+`tools/mkadt.py --j8` builds the ADT from measured values, not the SM7150
+defaults:
+
+| Fact | Value | Source |
+|---|---|---|
+| GICv2 distributor | `0x0b000000`, 4 KiB | stock boot FDT `/soc/interrupt-controller@b000000` |
+| GICv2 CPU interface | `0x0b002000`, 4 KiB | same node |
+| Virtual timer INTID | 19 | same as the J8 machine config |
+| Framebuffer | `0x90001000`, `0x13ff000` bytes | `/reserved-memory/splash_region@0x90001000` |
+| DDR banks | `0x80000000+2 GiB`, `0x10000000+1.75 GiB` | live `/proc/device-tree/memory/reg` |
+| Highest fixed carve-out | ends `0x99000000` | `/reserved-memory/*` reg values |
+| Kernel RAM | `0x9a000000`, `0x66000000` | free window above all fixed carve-outs |
+
+A stage-1 Samsung v0 image is assembled locally by
+`work/assemble_j8_boot.py` (not committed; it needs the private stock image):
+
+- kernel = `gzip(shim Image)` + the stock boot DTB (the `Image.gz-dtb`
+  convention the ABL already accepts), verified by gzip roundtrip;
+- ramdisk = the `SWEETXNU` payload (`mkpayload.py`, no root image yet) at
+  `0x99000000`, the free 16 MiB window below kernel RAM;
+- header copied from `boot-stock.img` (page 2048, `0x80008000`/`0x82000000`/
+  `0x81e00000`), no AVB footer and no `SEANDROIDENFORCE`, like the image that
+  boots today.
+
+Stage-1 image: 11,665,408 bytes, SHA-256
+`bb135659d62547e100fe36b7bb17659838e9b00a84c3bc3cbead780bda7a38af`.
+Rollback: `work/j8-probe/j8-boot-rollback.tar` contains `boot.img`
+`111aa3ed0a5191ada9e1b32aa7ed82d495f27df2ab67561415c58ca2b873a2ab`
+(the ROM image), verified by extracting and hashing it.
+
+Still missing before a hardware attempt can be judged meaningful:
+GICv2 delivery from the shim-owned MMU, an eMMC driver in XNU, and a root
+filesystem; and the unit must be charged above 50 %.
 
 The runs needed patches 0082-0087 (machine config; Xcode 16 `IORPC.kernelContent`
 backport; iOS user-VA limit for the 4 KiB commpage; staging the ios-sweet
@@ -113,12 +150,12 @@ the queue.
 
 Still missing, in dependency order:
 
-1. a shim that builds 4 KiB-granule tables (`shim/mmu.c`, `shim/shim.c` are
-   16 KiB-only);
+1. ~~a shim that builds 4 KiB-granule tables~~ (implemented as `J8_4K`);
 2. a GICv2 interrupt driver (distributor/CPU interface, timer PPI 19, SGIs)
-   and the `sleh_irq` dispatch it feeds;
+   and the `sleh_irq` dispatch it feeds (kernel side done; shim-side bring-up
+   unproven on hardware);
 3. the J8 board devices (SDCC/eMMC, display, touch, keys) as separate patches;
-4. a J8 ADT/device tree for the shim and QEMU harness.
+4. ~~a J8 ADT~~ (implemented as `mkadt.py --j8`; hardware-unproven).
 
 ## 5. Building the iOS root image (not run)
 

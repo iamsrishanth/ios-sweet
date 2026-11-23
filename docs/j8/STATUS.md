@@ -29,7 +29,9 @@ evidence.
 | Recovery path and rollback assets | **hardware-verified** *(historical Android use)* + documented | `INSTALL-RECOVERY.md` |
 | Page-size capability (`TGran16`) | **documented: no 16K** (unit confirmation failed) | Cortex-A53 r0p4 TRM `TGran16 = 0x0`; EL0 access is architecturally absent (SIGILL measured); the EL1 probe image was built and flashed but the **bootloader rejected it**, so no on-unit read exists |
 | XNU kernel built for J8 | **QEMU: Mach IPC verified** | CI run **45064489585** (kernel63): HFS root, devfs, fork/wait and pipe tests pass; init allocates a Mach receive right, inserts a send right, sends and receives a message through `mach_msg2`, and prints `J8 init: mach ipc roundtrip ok`. No phone boot. |
-| J8 shim (4 KiB granule MMU) | **implemented-untested** | `shim/mmu.c` now has a `J8_4K` build path: 4 KiB pages, 2 MiB blocks, 4 KiB TCR and payload alignment; source validation passed, cross-build and hardware boot remain undone |
+| J8 shim (4 KiB granule MMU) | **built locally, untested on hardware** | `shim/mmu.c` `J8_4K`: 4 KiB pages, 2 MiB blocks, 4 KiB TCR, 4 KiB payload alignment, J8 framebuffer constants from the stock boot FDT. Cross-compiled locally (131,072-byte `Image`); no phone boot |
+| J8-specific ADT | **built from measured values** | `tools/mkadt.py --j8`: GICv2 `0x0b000000`/`0x0b002000`, timer INTID 19, framebuffer `0x90001000` 720x1480, DDR `0x9a000000+0x66000000` above all fixed carve-outs |
+| J8 hardware boot image (stage 1) | **prepared, not flashed** | Samsung v0 `Image.gz-dtb` + `SWEETXNU` payload, 11,665,408 bytes, SHA-256 `bb135659d62547e100fe36b7bb17659838e9b00a84c3bc3cbead780bda7a38af`; rollback tar verified (`111aa3ed…a2ab`). Requires explicit user approval and >50 % battery |
 | Anything booting on the J8 from this project | **QEMU only** | VM init complete; blocked by a NULL platform-expert object; nothing flashed since the rejected probe |
 
 ## 3. Feature matrix

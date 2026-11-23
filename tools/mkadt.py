@@ -29,6 +29,20 @@ SOC_BASE = 0x01000000
 GICD, GICD_SIZE = 0x17a00000, 0x10000
 GICR, GICR_SIZE = 0x17a60000, 0x100000
 FB, FB_SIZE = 0x9c000000, 0x1700000
+
+# J8 (msm8953) measured from the stock boot image's appended FDT
+# (work/gapps/boot-stock.img, /soc/interrupt-controller@b000000 and
+# /reserved-memory/splash_region@0x90001000). The panel is 720x1480.
+# J8 (msm8953) measured from the stock boot FDT and the live /memory node:
+# banks 0x80000000+2G and 0x10000000+1.75G; the highest fixed carve-out ends at
+# 0x99000000, so kernel-managed RAM starts at 0x9A000000 (1.6G).
+J8_PHYS_BASE = 0x9a000000
+J8_MEM_SIZE = 0x66000000
+J8_GICD, J8_GICD_SIZE = 0x0b000000, 0x1000
+J8_GICC, J8_GICC_SIZE = 0x0b002000, 0x1000
+J8_FB, J8_FB_SIZE = 0x90001000, 0x13ff000
+J8_FB_W, J8_FB_H = 720, 1480
+J8_FB_STRIDE = J8_FB_W * 4
 SWEET_ECID = 0x5357454554000001  # 'SWEET' + 1, synthetic
 FB_W, FB_H, FB_STRIDE = 1080, 2400, 1080 * 4
 # Internal UFS host (ufshc@1d84000 "ufs_mem"); QEMU virt has none
@@ -76,17 +90,31 @@ def node(name, props=(), children=()):
     return n
 
 
-def build(seed=None, qemu=False, highmem=False, gicv2=False):
+def build(seed=None, qemu=False, highmem=False, gicv2=False, j8=False):
     """qemu=True: QEMU virt's GIC addresses and CNTFRQ (tools/qemu-sweet.py).
 
     gicv2=True (implies QEMU): emit the GICv2 distributor/CPU-interface node
     the J8 driver expects instead of the GICv3 distributor/redistributor one.
+    j8=True: hardwired for the real SM-J810G: measured GICv2 and continuous
+    splash framebuffer addresses from the stock boot FDT, upper DDR bank RAM.
     """
+    if j8:
+        highmem = False
     phys_base, mem_size = (HIGH_PHYS_BASE, HIGH_MEM_SIZE) if highmem else (PHYS_BASE, MEM_SIZE)
+    if j8:
+        phys_base, mem_size = J8_PHYS_BASE, J8_MEM_SIZE
     # Carve the panic log off the top so the kernel never allocates over it.
     panic_base = phys_base + mem_size - PANIC_LOG_SIZE
     mem_size -= PANIC_LOG_SIZE
-    if qemu:
+    fb_base, fb_size = FB, FB_SIZE
+    fb_w, fb_h, fb_stride = FB_W, FB_H, FB_STRIDE
+    gicd_size = GICD_SIZE
+    if j8:
+        gicd, gic_cpu, gic_cpu_size, timebase = J8_GICD, J8_GICC, J8_GICC_SIZE, TIMEBASE
+        gicd_size = J8_GICD_SIZE
+        fb_base, fb_size = J8_FB, J8_FB_SIZE
+        fb_w, fb_h, fb_stride = J8_FB_W, J8_FB_H, J8_FB_STRIDE
+    elif qemu:
         gicd = QEMU_GICD
         timebase = QEMU_TIMEBASE
         if gicv2:
@@ -179,10 +207,10 @@ def build(seed=None, qemu=False, highmem=False, gicv2=False):
 
     gic = node('gic', [
         ph(),
-        ('compatible', cstr('arm,gic-2') if gicv2 else cstr('arm,gic-v3')),
+        ('compatible', cstr('arm,gic-2') if (gicv2 or j8) else cstr('arm,gic-v3')),
         ('interrupt-controller', b''),
-        ('virtual-timer-intid', u32(QEMU_VTIMER_INTID if qemu else VTIMER_INTID)),
-        ('reg', u64(gicd - SOC_BASE, GICD_SIZE, gic_cpu - SOC_BASE, gic_cpu_size)),
+        ('virtual-timer-intid', u32(QEMU_VTIMER_INTID if (qemu and not j8) else VTIMER_INTID)),
+        ('reg', u64(gicd - SOC_BASE, gicd_size, gic_cpu - SOC_BASE, gic_cpu_size)),
     ])
     arm_io = node('arm-io', [
         ph(),
@@ -210,10 +238,10 @@ def build(seed=None, qemu=False, highmem=False, gicv2=False):
 
     fbcon = node('sweet-fbcon', [
         ph(),
-        ('reg', u64(FB, FB_SIZE)),
-        ('width', u32(FB_W)),
-        ('height', u32(FB_H)),
-        ('stride', u32(FB_STRIDE)),
+        ('reg', u64(fb_base, fb_size)),
+        ('width', u32(fb_w)),
+        ('height', u32(fb_h)),
+        ('stride', u32(fb_stride)),
     ])
 
     # bsd/dev/sweet_ufs.c: the UFS host ABL leaves running (absolute physical reg).
@@ -262,8 +290,9 @@ def build(seed=None, qemu=False, highmem=False, gicv2=False):
 
 if __name__ == '__main__':
     gicv2 = '--gicv2' in sys.argv
-    root = build(qemu='--qemu' in sys.argv or gicv2,
-                 highmem='--highmem' in sys.argv, gicv2=gicv2)
+    j8 = '--j8' in sys.argv
+    root = build(qemu=('--qemu' in sys.argv or gicv2) and not j8,
+                 highmem=('--highmem' in sys.argv) and not j8, gicv2=gicv2, j8=j8)
     blob = adt.serialize(root)
     open(sys.argv[1], 'wb').write(blob)
     if '--dump' in sys.argv:
