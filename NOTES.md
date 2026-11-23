@@ -54,9 +54,48 @@ All of this ran on the host; no phone command was issued in this round.
   holds `boot.img` `111aa3ed0a5191ada9e1b32aa7ed82d495f27df2ab67561415c58ca2b873a2ab`.
 - **Battery was 7 % (charging) at inspection time.** Do not write `boot`
   until it is above 50 %.
-- Not done, on purpose: nothing was written, no reboot, no Download Mode,
-  no `fastboot`/Odin command. Stage-1 is unproven on hardware; the shim's
-  GICv2 and MMU paths and the XNU eMMC/root stack are still missing.
+### Round 2 (same day): stage-1 flashed, the shim ran on the phone
+
+With the user's go-ahead the battery gate was explicitly waived. Steps that
+were actually executed, in order:
+
+1. `adb reboot recovery` → TWRP 3.6.1, root shell confirmed (`uid=0`).
+2. Full backup of the live `boot` partition (`mmcblk0p25`, 32 MiB) to
+   `/sdcard/j8-boot-current.img`, hashed on device and on the host:
+   `5e6d5c4a69cf419d230fd28543847ef9b171515ecd0819f5cd217e88508e1755`.
+3. Pushed the stage-1 image, verified its on-device hash, wrote it with
+   busybox `dd bs=4096` (its `dd` rejects `conv=fsync`; `sync` was run
+   separately) and verified the readback: `bb135659d62547e100fe36b7bb17659838e9b00a84c3bc3cbead780bda7a38af`.
+4. `/sbin/twrp reboot` → the phone booted the image. **The shim executed on
+   hardware and painted its console**: a photograph shows the expected label
+   layout (SHIM / INITRD / PHYS / VIRT / ENTRY / SEGS / BOOTARG / JUMP / XNU),
+   but every glyph is striped and teal/red because the continuous-splash
+   surface is **24 bpp** (`qcom,mdss-dsi-bpp = 0x18`, stride 720*3 = 2160),
+   not the 32 bpp the console assumed. Evidence:
+   `docs/j8/evidence/j8-2026-11-23-shim-32bpp-striped.jpg`.
+5. No adb/USB appeared after 150 s and no Samsung `VID_04E8` device
+   enumerated, i.e. the phone is **not** in Download Mode and not in Android —
+   consistent with the shim/XNU running without a USB stack.
+
+Fix and validation while the phone stays on that image:
+
+- `shim/console.{c,h}`: `FB_BPP`, byte-wise `put_px()`, RGB888 writes and a
+  `FB_STRIDE` of `FB_W * FB_BPP/8`; `shim/loader.c` passes `FB_BPP` as
+  `boot_args.Video.v_depth`.
+- Rebuilt (131,072 bytes) and **booted in QEMU virt** with the real payload:
+  the console renders perfectly and the log reads
+  `INITRD lo=90000000 hi=90ADAB…`, `PHYS base=9A000000 size=65…`,
+  `VIRT FFFFFFF006000000`, `ENTRY FFFFFFF0073414B8`, `SEGS n=0000000A`,
+  `BOOTARG pa=9BB97000`, `JUMP 000000009B3414B8`, `XNU jumping`.
+  Evidence: `docs/j8/evidence/qemu-2026-11-23-shim-4k-console.png`.
+- Corrected stage-1 image rebuilt: 11,667,456 bytes, SHA-256
+  `e4cb0343b76cf330e95cf047599eb95b4fe2f0cb609b5db9162faa54ddd5551e`.
+  **Not yet written** — it needs another TWRP session (Volume Up + USB).
+
+Open question for the next session: whether XNU itself reached its console on
+the phone. The QEMU run with the J8 ADT leaves the shim screen unchanged after
+`JUMP`, which is expected because QEMU has no GIC at `0x0b000000`; it is not
+evidence either way for the phone.
 
 
 **This is a feasibility/bring-up branch, not a working port.** One diagnostic

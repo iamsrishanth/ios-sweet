@@ -29,9 +29,9 @@ evidence.
 | Recovery path and rollback assets | **hardware-verified** *(historical Android use)* + documented | `INSTALL-RECOVERY.md` |
 | Page-size capability (`TGran16`) | **documented: no 16K** (unit confirmation failed) | Cortex-A53 r0p4 TRM `TGran16 = 0x0`; EL0 access is architecturally absent (SIGILL measured); the EL1 probe image was built and flashed but the **bootloader rejected it**, so no on-unit read exists |
 | XNU kernel built for J8 | **QEMU: Mach IPC verified** | CI run **45064489585** (kernel63): HFS root, devfs, fork/wait and pipe tests pass; init allocates a Mach receive right, inserts a send right, sends and receives a message through `mach_msg2`, and prints `J8 init: mach ipc roundtrip ok`. No phone boot. |
-| J8 shim (4 KiB granule MMU) | **built locally, untested on hardware** | `shim/mmu.c` `J8_4K`: 4 KiB pages, 2 MiB blocks, 4 KiB TCR, 4 KiB payload alignment, J8 framebuffer constants from the stock boot FDT. Cross-compiled locally (131,072-byte `Image`); no phone boot |
-| J8-specific ADT | **built from measured values** | `tools/mkadt.py --j8`: GICv2 `0x0b000000`/`0x0b002000`, timer INTID 19, framebuffer `0x90001000` 720x1480, DDR `0x9a000000+0x66000000` above all fixed carve-outs |
-| J8 hardware boot image (stage 1) | **prepared, not flashed** | Samsung v0 `Image.gz-dtb` + `SWEETXNU` payload, 11,665,408 bytes, SHA-256 `bb135659d62547e100fe36b7bb17659838e9b00a84c3bc3cbead780bda7a38af`; rollback tar verified (`111aa3ed…a2ab`). Requires explicit user approval and >50 % battery |
+| J8 shim (4 KiB granule MMU) | **ran on the phone (2026-11-23)** | Stage-1 image written to `boot` (readback verified `bb1356…`); the shim painted its console on the real panel. Text was striped because the surface is 24 bpp, not 32 bpp; fixed and re-validated in QEMU (`qemu-2026-11-23-shim-4k-console.png`) |
+| J8-specific ADT | **built from measured values** | `tools/mkadt.py --j8`: GICv2 `0x0b000000`/`0x0b002000`, timer INTID 19, framebuffer `0x90001000` 720x1480 **24 bpp**, DDR `0x9a000000+0x66000000` above all fixed carve-outs |
+| J8 hardware boot image (stage 1) | **booted once, superseded by the 24 bpp fix** | First image `bb1356…` booted the shim; corrected image `e4cb0343b76cf330e95cf047599eb95b4fe2f0cb609b5db9162faa54ddd5551e`. Rollback verified (`111aa3ed…a2ab`); current `boot` backed up as `5e6d5c4a…` |
 | Anything booting on the J8 from this project | **QEMU only** | VM init complete; blocked by a NULL platform-expert object; nothing flashed since the rejected probe |
 
 ## 3. Feature matrix

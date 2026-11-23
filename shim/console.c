@@ -11,17 +11,29 @@
 #define MARGIN		24
 #define LABEL_COLS	8
 
-volatile uint32_t *con_fb = (volatile uint32_t *)FB_BASE;
+volatile uint8_t *con_fb = (volatile uint8_t *)FB_BASE;
 static uint32_t con_bg;
 static int row;
 
+/* J8's continuous splash surface is 24-bit RGB888; SWEET's is 32-bit. */
+static inline void put_px(int x, int y, uint32_t c)
+{
+	volatile uint8_t *p = con_fb + (uint64_t)y * FB_STRIDE +
+	    (uint64_t)x * (FB_BPP / 8);
+#if FB_BPP == 24
+	p[0] = (uint8_t)c;		/* B */
+	p[1] = (uint8_t)(c >> 8);	/* G */
+	p[2] = (uint8_t)(c >> 16);	/* R */
+#else
+	*(volatile uint32_t *)p = c;
+#endif
+}
+
 void con_clear(uint32_t bg)
 {
-	for (int y = 0; y < FB_H; y++) {
-		volatile uint32_t *line = con_fb + y * (FB_STRIDE / 4);
+	for (int y = 0; y < FB_H; y++)
 		for (int x = 0; x < FB_W; x++)
-			line[x] = bg;
-	}
+			put_px(x, y, bg);
 	con_bg = bg;
 	row = 0;
 }
@@ -37,12 +49,10 @@ static void put_char(int col, char ch, uint32_t fg)
 	for (int gy = 0; gy < 16; gy++)
 		for (int gx = 0; gx < 8; gx++) {
 			uint32_t c = (g[gy] & (0x80 >> gx)) ? fg : con_bg;
-			for (int sy = 0; sy < SCALE; sy++) {
-				volatile uint32_t *p = con_fb + (y0 + gy * SCALE + sy) * (FB_STRIDE / 4)
-						       + x0 + gx * SCALE;
+			for (int sy = 0; sy < SCALE; sy++)
 				for (int sx = 0; sx < SCALE; sx++)
-					p[sx] = c;
-			}
+					put_px(x0 + gx * SCALE + sx,
+					    y0 + gy * SCALE + sy, c);
 		}
 }
 
