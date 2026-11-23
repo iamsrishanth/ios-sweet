@@ -5,6 +5,10 @@
 #include "console.h"
 #include "font.h"
 
+#ifndef J8_FB_STRIDE
+#define J8_FB_STRIDE 2944
+#endif
+
 #define SCALE		3
 #define CH_W		(8 * SCALE)
 #define CH_H		(16 * SCALE)

@@ -113,9 +113,16 @@ pre-test backup exactly:
 confirmation, `/sbin/twrp reboot` returned the phone to Android; ADB then showed
 `SM-J810G`, Android 11 and bootloader `J810GDDU6CWH2`. Recovery is verified.
 
-The corrected 24-bpp stage-1 image (`e4cb0343…5551e`) was **not** flashed;
-therefore the hardware result remains: shim execution demonstrated once, XNU
-hardware execution unproven.
+The corrected 24-bpp stage-1 image (`e4cb0343…5551e`) was not ultimately
+used; Android reports the linear surface as 32 bpp. Stage-3 used a 32-bpp
+candidate with the measured 2944-byte stride (`a35d7cf0…4974`) and still showed
+striped text. Host diagnosis found a more serious bug: the J8 MMU code was
+writing an unaligned framebuffer address into an L2 block entry, then replacing
+image mappings in the same block. A stage-4 MMU fix now creates an L3 mapping
+for the J8 splash block and marks only the framebuffer pages non-cacheable;
+image pages stay write-back. It is locally compiled and assembled as
+`fbedc347b27ddf8ec9a95b8e22de7801b0476f65230449498ab8c1ac3c039d22`, but has
+not been staged or flashed. Hardware XNU execution remains unproven.
 
 
 **This is a feasibility/bring-up branch, not a working port.** One diagnostic

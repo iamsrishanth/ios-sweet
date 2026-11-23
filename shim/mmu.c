@@ -13,6 +13,7 @@
  */
 #include <stdint.h>
 #include "mmu.h"
+#include "console.h"
 
 #ifndef J8_4K
 #define PG_SHIFT	14
@@ -104,16 +105,30 @@ int mmu_enable(struct mmu_info *info)
 	zero_table(l2);
 	for (uint64_t i = 0; i < (8UL << 30) >> BLK_SHIFT; i++)
 		l2[i] = (i << BLK_SHIFT) | DEV_FLAGS | D_BLOCK;
+	/* The J8 splash region is inside the 2 MiB block at 0x90000000; map the
+	 * whole block non-cacheable before the L3 image mappings are installed. */
+#ifndef J8_4K
 	l2[FB_PHYS >> BLK_SHIFT] = (FB_PHYS & ~(BLK_SIZE - 1)) | NC_FLAGS | D_BLOCK;
+#endif
 
-	/* L3 for each block that holds part of the image */
-	for (uint64_t blk = img_lo >> BLK_SHIFT; blk <= (img_hi - 1) >> BLK_SHIFT; blk++) {
+	/* L3 for each block that holds part of the image. On J8, also split the
+	 * splash block so its framebuffer remains non-cacheable under MMU-on. */
+	uint64_t first_blk = img_lo >> BLK_SHIFT;
+	uint64_t last_blk = (img_hi - 1) >> BLK_SHIFT;
+#ifdef J8_4K
+	uint64_t fb_blk = FB_PHYS >> BLK_SHIFT;
+	if (fb_blk < first_blk) first_blk = fb_blk;
+	if (fb_blk > last_blk) last_blk = fb_blk;
+#endif
+	for (uint64_t blk = first_blk; blk <= last_blk; blk++) {
 		uint64_t *l3 = (uint64_t *)(pool + (1 + n_l3++) * PG_SIZE);
 		uint64_t base = blk << BLK_SHIFT;
 		for (int i = 0; i < NENT; i++) {
 			uint64_t pa = base + ((uint64_t)i << PG_SHIFT);
 			int ours = pa >= img_lo && pa < img_hi;
-			l3[i] = pa | (ours ? WB_FLAGS : DEV_FLAGS) | D_PAGE;
+			int fb = pa >= (FB_PHYS & ~(PG_SIZE - 1)) &&
+			    pa < FB_PHYS + (uint64_t)FB_STRIDE * FB_H;
+			l3[i] = pa | (fb ? NC_FLAGS : (ours ? WB_FLAGS : DEV_FLAGS)) | D_PAGE;
 		}
 		l2[blk] = (uintptr_t)l3 | D_TABLE;
 	}

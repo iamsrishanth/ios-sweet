@@ -42,7 +42,8 @@ J8_GICD, J8_GICD_SIZE = 0x0b000000, 0x1000
 J8_GICC, J8_GICC_SIZE = 0x0b002000, 0x1000
 J8_FB, J8_FB_SIZE = 0x90001000, 0x13ff000
 J8_FB_W, J8_FB_H = 720, 1480
-J8_FB_STRIDE = J8_FB_W * 4
+# Android fb0 reports a 2944-byte line (720 pixels x 4 plus 64 bytes padding).
+J8_FB_STRIDE = 2944
 SWEET_ECID = 0x5357454554000001  # 'SWEET' + 1, synthetic
 FB_W, FB_H, FB_STRIDE = 1080, 2400, 1080 * 4
 # Internal UFS host (ufshc@1d84000 "ufs_mem"); QEMU virt has none
