@@ -31,7 +31,7 @@ evidence.
 | XNU kernel built for J8 | **QEMU: Mach IPC verified** | CI run **45064489585** (kernel63): HFS root, devfs, fork/wait and pipe tests pass; init allocates a Mach receive right, inserts a send right, sends and receives a message through `mach_msg2`, and prints `J8 init: mach ipc roundtrip ok`. No phone boot. |
 | J8 shim (4 KiB granule MMU) | **ran on the phone (2026-11-23)** | Stage-1 image written to `boot` (readback verified `bb1356…`); the shim painted its console on the real panel. Text was striped because the surface is 24 bpp, not 32 bpp; fixed and re-validated in QEMU (`qemu-2026-11-23-shim-4k-console.png`) |
 | J8-specific ADT | **built from measured values** | `tools/mkadt.py --j8`: GICv2 `0x0b000000`/`0x0b002000`, timer INTID 19, framebuffer `0x90001000` 720x1480 **24 bpp**, DDR `0x9a000000+0x66000000` above all fixed carve-outs |
-| J8 hardware boot image (stage 1) | **booted once, superseded by the 24 bpp fix** | First image `bb1356…` booted the shim; corrected image `e4cb0343b76cf330e95cf047599eb95b4fe2f0cb609b5db9162faa54ddd5551e`. Rollback verified (`111aa3ed…a2ab`); current `boot` backed up as `5e6d5c4a…` |
+| J8 hardware boot image (stage 1) | **booted once, recovered** | First image `bb1356…` booted the shim; corrected image `e4cb0343b76cf330e95cf047599eb95b4fe2f0cb609b5db9162faa54ddd5551e` was not flashed. Original `boot` restored after confirmation; full readback `5e6d5c4a69cf419d230fd28543847ef9b171515ecd0819f5cd217e88508e1755`; Android 11 returned over ADB |
 | Anything booting on the J8 from this project | **QEMU only** | VM init complete; blocked by a NULL platform-expert object; nothing flashed since the rejected probe |
 
 ## 3. Feature matrix

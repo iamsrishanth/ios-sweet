@@ -97,6 +97,26 @@ the phone. The QEMU run with the J8 ADT leaves the shim screen unchanged after
 `JUMP`, which is expected because QEMU has no GIC at `0x0b000000`; it is not
 evidence either way for the phone.
 
+### Recovery after stage-1 test (2026-11-23)
+
+The user reported that the striped shim screen remained and TWRP was initially
+unreachable. After leaving USB disconnected until the unit powered down, the
+Volume-Up + USB sequence entered TWRP. Read-only checks confirmed root TWRP
+(`3.6.1_9-goldfish07(Ayush Bisht)`), the staged test image hash
+`bb135659…a38af`, and the boot partition still contained that same hash.
+
+After explicit user confirmation, **only** `/dev/block/by-name/boot` was
+restored from `/sdcard/j8-boot-current.img`. Full 32 MiB readback matched the
+pre-test backup exactly:
+`5e6d5c4a69cf419d230fd28543847ef9b171515ecd0819f5cd217e88508e1755`.
+`recovery` and every other partition were not written. After a second explicit
+confirmation, `/sbin/twrp reboot` returned the phone to Android; ADB then showed
+`SM-J810G`, Android 11 and bootloader `J810GDDU6CWH2`. Recovery is verified.
+
+The corrected 24-bpp stage-1 image (`e4cb0343…5551e`) was **not** flashed;
+therefore the hardware result remains: shim execution demonstrated once, XNU
+hardware execution unproven.
+
 
 **This is a feasibility/bring-up branch, not a working port.** One diagnostic
 image was flashed to `boot` and was **rejected by the bootloader**. The J8 XNU
