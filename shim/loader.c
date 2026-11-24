@@ -11,6 +11,9 @@
 #include "console.h"
 #include "fdt.h"
 #include "loader.h"
+#ifdef J8_QEMU_UART_DEBUG
+void qemu_uart_hex(const char *label, uint64_t value);
+#endif
 
 #define BOOT_LINE_LENGTH	608
 #ifdef J8_4K
@@ -144,7 +147,15 @@ const char *loader_boot(uintptr_t dtb)
 	con_hex("JUMP", entry_pa);
 	con_str("XNU", "jumping (fbcon clears screen)");
 
-	/* Everything was written with the MMU and caches off; drop any stale I-cache lines too. */
+#ifdef J8_QEMU_UART_DEBUG
+	qemu_uart_hex("J8_BEFORE_XNU ENTRY=", entry_pa);
+	qemu_uart_hex("J8_BEFORE_XNU BOOTARGS=", ba_pa);
+	uint64_t sctlr_debug;
+	__asm__ volatile("mrs %0, sctlr_el1" : "=r"(sctlr_debug));
+	qemu_uart_hex("J8_BEFORE_XNU SCTLR=", sctlr_debug);
+#endif
+	/* The loader wrote segments with the MMU and caches off; invalidate the
+	 * I-cache before XNU's first instruction fetch. */
 	__asm__ volatile("dsb sy; ic iallu; dsb sy; isb" ::: "memory");
 	((xnu_entry_t)entry_pa)(ba_pa);
 	return "xnu returned";

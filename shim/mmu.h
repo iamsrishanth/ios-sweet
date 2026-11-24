@@ -15,3 +15,4 @@ struct mmu_info {
 
 int mmu_enable(struct mmu_info *info);
 uint64_t mmu_probe(uintptr_t va);
+uint64_t mmu_leaf_desc(uintptr_t va);

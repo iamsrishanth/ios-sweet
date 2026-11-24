@@ -13,11 +13,13 @@
 #define J8_FB_STRIDE	2944
 #endif
 #define FB_STRIDE	J8_FB_STRIDE
+#define FB_MAP_SIZE	0x13ff000UL	/* full /reserved-memory/splash_region */
 #else
 #define FB_BASE		0x9c000000UL	/* reserved-memory cont_splash_region */
 #define FB_W		1080
 #define FB_H		2400
 #define FB_BPP		32
+#define FB_MAP_SIZE	((uint64_t)FB_STRIDE * FB_H)
 #endif
 #ifndef FB_STRIDE
 #define FB_STRIDE	(FB_W * (FB_BPP / 8))

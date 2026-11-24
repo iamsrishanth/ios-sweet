@@ -64,6 +64,35 @@ static volatile uint64_t sec_probe[4];	/* CPU1 redistributor write test */
 static volatile uint32_t irq_count, irq_other, irq_last;
 static volatile int irq_src;
 
+#if defined(J8_MMU_SELFTEST) || defined(J8_QEMU_UART_DEBUG)
+#define QEMU_UART0 ((volatile uint32_t *)0x09000000UL)
+static void qemu_uart_init(void)
+{
+	QEMU_UART0[0x30 / 4] = 0;
+	QEMU_UART0[0x24 / 4] = 13;
+	QEMU_UART0[0x28 / 4] = 1;
+	QEMU_UART0[0x2c / 4] = 0x70;
+	QEMU_UART0[0x30 / 4] = 0x301;
+}
+static void qemu_uart_puts(const char *s)
+{
+	while (*s) {
+		while (QEMU_UART0[0x18 / 4] & (1U << 5))
+			;
+		QEMU_UART0[0] = (uint8_t)*s++;
+	}
+}
+void qemu_uart_hex(const char *label, uint64_t value) __attribute__((noinline));
+void qemu_uart_hex(const char *label, uint64_t value)
+{
+	static const char hex[] = "0123456789abcdef";
+	qemu_uart_puts(label);
+	for (int n = 15; n >= 0; n--)
+		QEMU_UART0[0] = hex[(value >> (n * 4)) & 0xf];
+	qemu_uart_puts("\\r\\n");
+}
+#endif
+
 /* ICC_SGI1R_EL1 value targeting the calling core only. */
 static uint64_t sgi_self(unsigned id)
 {
@@ -374,6 +403,76 @@ void shim_main(uint64_t dtb)
 {
 	struct mmu_info mi;
 
+#ifdef J8_QEMU_UART_DEBUG
+	qemu_uart_init();
+	qemu_uart_puts("J8_STAGE4 START\\r\\n");
+#endif
+#ifdef J8_MMU_SELFTEST
+	{
+	/* Host-only QEMU path: skip loader/UFS/GIC and test the actual page walker. */
+	(void)dtb;
+	qemu_uart_init();
+	qemu_uart_puts("J8_MMU_SELFTEST START\\r\\n");
+	stage = "mmu preflight";
+	con_clear(BLUE);
+	con_str("TEST", "J8 4K MMU preflight");
+	int rc = mmu_enable(&mi);
+#ifdef J8_QEMU_UART_DEBUG
+	qemu_uart_puts("J8_STAGE4 MMU BUILT\\r\\n");
+#endif
+	if (rc) {
+		qemu_uart_puts("J8_MMU_SELFTEST BUILD_FAIL\\r\\n");
+		for (;;) __asm__ volatile("wfe");
+	}
+	volatile uint64_t canary = 0x4a384d4d55544553ULL;
+	uintptr_t image_va = (uintptr_t)&shim_main;
+	uintptr_t stack_va = (uintptr_t)&mi;
+	uintptr_t fb_first = FB_PHYS;
+	uintptr_t fb_mid = FB_PHYS + ((uint64_t)FB_STRIDE * FB_H) / 2;
+	uintptr_t fb_last = FB_PHYS + FB_MAP_SIZE - 1;
+	uint64_t image_par = mmu_probe(image_va);
+	uint64_t stack_par = mmu_probe(stack_va);
+	uint64_t fb_par = mmu_probe(fb_first);
+	uint64_t fb_mid_par = mmu_probe(fb_mid);
+	uint64_t fb_last_par = mmu_probe(fb_last);
+	uint64_t hole_par = mmu_probe(0x300000000ULL);
+	uint64_t img_desc = mmu_leaf_desc(image_va);
+	uint64_t fb_desc = mmu_leaf_desc(fb_first);
+	uint64_t fb_mid_desc = mmu_leaf_desc(fb_mid);
+	uint64_t fb_last_desc = mmu_leaf_desc(fb_last);
+	#define IDENT(par, va) (!(par & 1) && ((par & 0x0000fffffffff000ULL) == ((uint64_t)(va) & ~0xfffULL)))
+	int ok = canary == 0x4a384d4d55544553ULL && IDENT(image_par, image_va) &&
+	    IDENT(stack_par, stack_va) && IDENT(fb_par, fb_first) &&
+	    IDENT(fb_mid_par, fb_mid) && IDENT(fb_last_par, fb_last) && (hole_par & 1) &&
+	    ((img_desc >> 2) & 7) == 1 && /* MAIR index 1 = Normal-WB */
+	    ((fb_desc >> 2) & 7) == 2 && ((fb_mid_desc >> 2) & 7) == 2 &&
+	    ((fb_last_desc >> 2) & 7) == 2; /* NC */
+	con_clear(ok ? BLUE : RED);
+	con_str("TEST", "MMU ACTIVE");
+	con_hex2("L3", "n=", (uint32_t)mi.n_l3, "rc=", (uint32_t)rc);
+	con_hex2("IMG", "pa=", (uint32_t)(image_par & 0xffffffff), "ok=", IDENT(image_par, image_va));
+	con_hex2("STACK", "pa=", (uint32_t)(stack_par & 0xffffffff), "ok=", IDENT(stack_par, stack_va));
+	con_hex2("FB FIRST", "pa=", (uint32_t)(fb_par & 0xffffffff), "ok=", IDENT(fb_par, fb_first));
+	con_hex2("FB MID", "pa=", (uint32_t)(fb_mid_par & 0xffffffff), "ok=", IDENT(fb_mid_par, fb_mid));
+	con_hex2("FB LAST", "pa=", (uint32_t)(fb_last_par & 0xffffffff), "ok=", IDENT(fb_last_par, fb_last));
+	con_hex2("HOLE", "fault=", (uint32_t)(hole_par & 1), "expected=", 1);
+	con_hex2("ATTR", "image=", (uint32_t)((img_desc >> 2) & 7), "fb=", (uint32_t)((fb_desc >> 2) & 7));
+	con_hex2("ATTR END", "fb=", (uint32_t)((fb_last_desc >> 2) & 7), "expect=", 2);
+	__asm__ volatile("dsb sy" ::: "memory");
+	int fb_ok = con_fb[0] == (uint8_t)BLUE && con_fb[1] == (uint8_t)(BLUE >> 8) &&
+	    con_fb[2] == (uint8_t)(BLUE >> 16) && con_fb[3] == (uint8_t)(BLUE >> 24);
+	ok &= fb_ok;
+	con_str("FB STORE", fb_ok ? "readback ok" : "readback failed");
+	con_clear(ok ? GREEN : RED);
+	con_str("MMU TEST", ok ? "PASS" : "FAIL");
+	qemu_uart_puts(ok ? "J8_MMU_SELFTEST PASS\\r\\n" : "J8_MMU_SELFTEST FAIL\\r\\n");
+	for (;;) __asm__ volatile("wfe");
+	}
+#endif
+
+#ifdef J8_QEMU_UART_DEBUG
+	qemu_uart_puts("J8_STAGE4 LOADER PATH\\r\\n");
+#endif
 	/* An xnu payload in the ramdisk means: boot it (MMU stays off). */
 	stage = "loader";
 	con_clear(RED);

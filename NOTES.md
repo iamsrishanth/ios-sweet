@@ -113,16 +113,35 @@ pre-test backup exactly:
 confirmation, `/sbin/twrp reboot` returned the phone to Android; ADB then showed
 `SM-J810G`, Android 11 and bootloader `J810GDDU6CWH2`. Recovery is verified.
 
-The corrected 24-bpp stage-1 image (`e4cb0343…5551e`) was not ultimately
-used; Android reports the linear surface as 32 bpp. Stage-3 used a 32-bpp
-candidate with the measured 2944-byte stride (`a35d7cf0…4974`) and still showed
-striped text. Host diagnosis found a more serious bug: the J8 MMU code was
-writing an unaligned framebuffer address into an L2 block entry, then replacing
-image mappings in the same block. A stage-4 MMU fix now creates an L3 mapping
-for the J8 splash block and marks only the framebuffer pages non-cacheable;
-image pages stay write-back. It is locally compiled and assembled as
-`fbedc347b27ddf8ec9a95b8e22de7801b0476f65230449498ab8c1ac3c039d22`, but has
-not been staged or flashed. Hardware XNU execution remains unproven.
+The corrected 24-bpp stage-1 image (`e4cb0343…5551e`) was not used; restored
+Android reports fb0 32 bpp / stride 2944, while the panel FDT's 24-bpp value is
+DSI wire format. Stage-3 (`a35d7cf0…4974`) still showed striped text. Host
+review found the stage-4 MMU implementation itself had an invalid hierarchy:
+with `T0SZ=25`, TTBR0 requires L1→L2→L3, not one table. A real 13+ page J8
+L1/L2/L3 builder is now in `shim/mmu.c`; a QEMU-only self-test passes image,
+stack and first/middle/last splash identity translations, an unmapped address
+fault, WB-vs-NC descriptor attributes, a post-MMU framebuffer readback, and
+prints `J8_MMU_SELFTEST PASS`. Selftest image: 217,088 bytes,
+`bd05bbfa487dba9dd8a06c929b08b87c9ab13440ccc7c3708054bfcef8e114ee`.
+
+The user-provided stage-3 screen photo also contains an XNU panic after `JUMP`;
+this demonstrates XNU did enter on the phone, then panicked early. This revises
+the earlier “XNU hardware execution unproven” statement: XNU entry is now
+hardware-observed, but a stable kernel boot is not. Read-only XNU/Mach-O analysis
+and QEMU trace show the earlier payload virtual base `0xfffffff006000000` was
+before the actual `__TEXT` base `0xfffffff007004000`; a diagnostic J8 payload
+anchored at the actual 4 KiB-aligned `__TEXT` base proceeds to an early pmap
+fault in QEMU instead of the previous fabricated-VA fault. Diagnostic QEMU UART
+says entry PA `0x9a33d488`, bootargs `0x9ab93000`, initial SCTLR `0xc50838`.
+This QEMU failure is not evidence of device behavior.
+
+Current production stage-4 (not staged or flashed): shim `212,992` bytes,
+SHA-256 `b919e62a9412cd4c292eba897bc1e8a71ed5488b09c6725300e4587b65cd1ec3`;
+Samsung v0 image `11,667,456` bytes, SHA-256
+`184b6dcd5ea9faffa60dc495742b551707afc5e657ee648d64d146d734fd073a`. Payload
+construction and QEMU XNU entry still need complete validation. Do not flash
+stage-4 yet; phone is currently unreachable by USB and the exact original
+`boot` backup remains `5e6d5c4a…`.
 
 
 **This is a feasibility/bring-up branch, not a working port.** One diagnostic
